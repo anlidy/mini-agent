@@ -9,21 +9,26 @@
 - [ ] `AgentLoop` direct run API：`run(input, { sessionKey })`
 - [ ] 简化 turn 状态机：restore、build、run、save、respond
 - [ ] `TurnContext` 数据结构
-- [ ] `AgentRunner` tool-calling iteration loop
-- [ ] `AgentRunSpec` / `AgentRunResult`
-- [ ] max iterations 保护
-- [ ] 工具结果回填到 messages
-- [ ] final assistant message 持久化
-- [ ] 基础 hook 接口
+- [x] `AgentRunner` tool-calling iteration loop
+- [x] `AgentRunSpec` / `AgentRunResult`
+- [x] max iterations 保护
+- [x] 工具结果回填到 messages
+- [x] final assistant message 持久化
+- [x] 基础 hook 接口
+- [x] AgentRunner hook 生命周期
+- [x] AgentRunner 基础上下文治理
+- [x] AgentRunner 空响应重试
+- [x] AgentRunner contextWindowTokens 裁剪
 
 ### Provider
 
-- [ ] `LLMProvider` interface
-- [ ] `ToolCallRequest`
-- [ ] `LLMResponse`
-- [ ] OpenAI-compatible provider
-- [ ] OpenAI tool schema 转换
-- [ ] provider usage 归一化
+- [x] `LLMProvider` interface
+- [x] `ToolCallRequest`
+- [x] `LLMResponse`
+- [x] finishReason 类型定义
+- [x] OpenAI-compatible provider
+- [x] OpenAI tool schema 转换
+- [x] provider usage 归一化
 
 ### Context
 
@@ -49,15 +54,15 @@
 
 ### Tool framework
 
-- [ ] `Tool` interface/base class
-- [ ] `ToolRegistry`
-- [ ] `register/get/getDefinitions`
-- [ ] `prepareCall`
-- [ ] JSON Schema 参数校验
-- [ ] schema-driven 参数类型转换
-- [ ] 工具不存在错误
-- [ ] 参数错误返回给模型
-- [ ] 执行异常返回给模型
+- [x] `Tool` interface/base class
+- [x] `ToolRegistry`
+- [x] `register/get/getDefinitions`
+- [x] `prepareCall`
+- [x] JSON Schema 参数校验
+- [x] schema-driven 参数类型转换
+- [x] 工具不存在错误
+- [x] 参数错误返回给模型
+- [x] 执行异常返回给模型
 
 ### File/search tools
 
