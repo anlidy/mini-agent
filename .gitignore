@@ -5,3 +5,5 @@ coverage/
 .env.*
 *.log
 sessions/
+.mini-agent/
+.codex

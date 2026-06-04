@@ -6,9 +6,9 @@
 
 ### Agent runtime
 
-- [ ] `AgentLoop` direct run API：`run(input, { sessionKey })`
-- [ ] 简化 turn 状态机：restore、build、run、save、respond
-- [ ] `TurnContext` 数据结构
+- [x] `AgentLoop` direct run API：`run(input, { sessionKey })`
+- [x] 简化 turn 状态机：restore、build、run、save、respond
+- [x] `TurnContext` 数据结构
 - [x] `AgentRunner` tool-calling iteration loop
 - [x] `AgentRunSpec` / `AgentRunResult`
 - [x] max iterations 保护
@@ -32,25 +32,25 @@
 
 ### Context
 
-- [ ] `ContextBuilder`
-- [ ] system prompt 模板
-- [ ] `AGENTS.md` / `SOUL.md` / `USER.md` bootstrap 读取
-- [ ] tool contract 注入
-- [ ] runtime context metadata 注入
-- [ ] session history 合并
-- [ ] 同 role message 合并
+- [x] `ContextBuilder`
+- [x] system prompt 模板
+- [x] `AGENTS.md` / `SOUL.md` / `USER.md` bootstrap 读取
+- [x] tool contract 注入
+- [x] runtime context metadata 注入
+- [x] session history 合并
+- [x] 同 role message 合并
 - [ ] 保存历史时移除 runtime context
 
 ### Session
 
-- [ ] `Session`
-- [ ] `SessionManager`
-- [ ] JSONL 持久化
-- [ ] safe session filename
-- [ ] 原子保存
-- [ ] history max messages 裁剪
-- [ ] 避免 orphan tool result 作为 history 开头
-- [ ] 大 tool result 截断
+- [x] `Session`
+- [x] `SessionManager`
+- [x] JSONL 持久化
+- [x] safe session filename
+- [x] 原子保存
+- [x] history max messages 裁剪
+- [x] 避免 orphan tool result 作为 history 开头
+- [x] 大 tool result 截断
 
 ### Tool framework
 
@@ -66,49 +66,49 @@
 
 ### File/search tools
 
-- [ ] workspace path resolver
-- [ ] workspace boundary option
-- [ ] `read_file`
-- [ ] `write_file`
-- [ ] `list_dir`
-- [ ] `find_files`
-- [ ] `grep`
-- [ ] 跳过常见 ignore dirs
-- [ ] 阻止危险 device paths
-- [ ] 输出截断
+- [x] workspace path resolver
+- [x] workspace boundary option
+- [x] `read_file`
+- [x] `write_file`
+- [x] `list_dir`
+- [x] `find_files`
+- [x] `grep`
+- [x] 跳过常见 ignore dirs
+- [x] 阻止危险 device paths
+- [x] 输出截断
 
 ### Web tools
 
-- [ ] `web_search`
-- [ ] `web_fetch`
-- [ ] http/https only
+- [x] `web_search`
+- [x] `web_fetch`
+- [x] http/https only
 - [ ] redirect limit
 - [ ] SSRF 防护
 - [ ] 响应大小限制
-- [ ] HTML 到文本
-- [ ] external content banner
+- [x] HTML 到文本
+- [x] external content banner
 
 ### Skills framework
 
-- [ ] `SkillsLoader`
-- [ ] `workspace/skills/{name}/SKILL.md` 发现
-- [ ] YAML frontmatter 解析
-- [ ] description 提取
-- [ ] always skills
+- [x] `SkillsLoader`
+- [x] `workspace/skills/{name}/SKILL.md` 发现
+- [x] YAML frontmatter 解析
+- [x] description 提取
+- [x] always skills
 - [ ] requirements 检查
-- [ ] skills summary 注入
-- [ ] load skill by name
+- [x] skills summary 注入
+- [x] load skill by name
 
 ### Config
 
-- [ ] workspace
-- [ ] provider apiKey/baseUrl/model
-- [ ] maxIterations
-- [ ] maxToolResultChars
-- [ ] contextWindowTokens 或 maxContextChars
-- [ ] sessions dir
+- [x] workspace
+- [x] provider apiKey/baseUrl/model
+- [x] maxIterations
+- [x] maxToolResultChars
+- [x] contextWindowTokens 或 maxContextChars
+- [x] sessions dir
 - [ ] web tool config
-- [ ] restrictToWorkspace
+- [x] restrictToWorkspace
 
 ## 暂不实现
 
@@ -148,26 +148,26 @@
 - [ ] token estimator
 - [ ] context compaction
 - [ ] tool concurrency
-- [ ] CLI interactive wrapper
+- [x] CLI interactive wrapper
 
 ## 架构一致性检查
 
-- [ ] Runner 不直接知道 session 或 workspace 产品逻辑，只通过 spec/context 获取必要信息。
-- [ ] ToolRegistry 不依赖具体 provider。
-- [ ] Provider 不执行工具，只返回 tool calls。
-- [ ] ContextBuilder 不调用 LLM 或工具。
-- [ ] SessionManager 不解析 prompt，不知道 provider。
-- [ ] SkillsLoader 不执行 skills，只读取和生成摘要。
-- [ ] AgentLoop 是唯一协调 session/context/runner/save/respond 的层。
+- [x] Runner 不直接知道 session 或 workspace 产品逻辑，只通过 spec/context 获取必要信息。
+- [x] ToolRegistry 不依赖具体 provider。
+- [x] Provider 不执行工具，只返回 tool calls。
+- [x] ContextBuilder 不调用 LLM 或工具。
+- [x] SessionManager 不解析 prompt，不知道 provider。
+- [x] SkillsLoader 不执行 skills，只读取和生成摘要。
+- [x] AgentLoop 是唯一协调 session/context/runner/save/respond 的层。
 
 ## 最小验收标准
 
-- [ ] 用户输入普通问题，模型直接回答，session 保存成功。
-- [ ] 用户要求读取文件，模型调用 `read_file`，再基于结果回答。
+- [x] 用户输入普通问题，模型直接回答，session 保存成功。
+- [x] 用户要求读取文件，模型调用 `read_file`，再基于结果回答。
 - [ ] 用户要求写文件，模型调用 `write_file`，session 保存工具调用和结果。
-- [ ] 用户要求搜索项目内容，模型调用 `find_files` 或 `grep`。
+- [x] 用户要求搜索项目内容，模型调用 `find_files` 或 `grep`。
 - [ ] 用户要求最新信息，模型调用 `web_search` 或 `web_fetch`。
-- [ ] 工具参数错误不会崩溃 runtime，而是返回给模型修正。
-- [ ] 达到 max iterations 时返回清晰停止信息。
-- [ ] 重启后同 session 能读取历史继续对话。
-- [ ] skills 目录存在时，system prompt 包含 summary；不存在时正常运行。
+- [x] 工具参数错误不会崩溃 runtime，而是返回给模型修正。
+- [x] 达到 max iterations 时返回清晰停止信息。
+- [x] 重启后同 session 能读取历史继续对话。
+- [x] skills 目录存在时，system prompt 包含 summary；不存在时正常运行。

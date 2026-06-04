@@ -11,6 +11,7 @@ export interface OpenAIProviderOptions {
   baseUrl?: string;
   model: string;
   fetch?: typeof fetch;
+  timeoutMs?: number;
 }
 
 export class OpenAIProvider implements LLMProvider {
@@ -18,12 +19,14 @@ export class OpenAIProvider implements LLMProvider {
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(options: OpenAIProviderOptions) {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
     this.model = options.model;
     this.fetchImpl = options.fetch ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? 60_000;
   }
 
   defaultModel(): string {
@@ -31,18 +34,33 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async chat(request: ChatRequest): Promise<LLMResponse> {
-    const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "authorization": `Bearer ${this.apiKey}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: request.model ?? this.model,
-        messages: request.messages,
-        ...(request.tools ? { tools: request.tools } : {})
-      })
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort(new Error(`OpenAI-compatible request timed out after ${this.timeoutMs}ms`));
+    }, this.timeoutMs);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "authorization": `Bearer ${this.apiKey}`,
+          "content-type": "application/json"
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: request.model ?? this.model,
+          messages: request.messages,
+          ...(request.tools ? { tools: request.tools } : {})
+        })
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`OpenAI-compatible request timed out after ${this.timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       throw new Error(

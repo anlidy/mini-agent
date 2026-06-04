@@ -1,0 +1,78 @@
+# AGENTS.md
+
+This repository is a TypeScript implementation of a minimal agent runtime. Work in this project should preserve the existing modular boundaries and keep the CLI usable.
+
+## Project Commands
+
+Run these before claiming a change is complete:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+Use the REPL during manual verification:
+
+```bash
+npm run repl -- --session default --resume
+```
+
+After build:
+
+```bash
+node dist/cli.js --session default --resume
+```
+
+## Architecture Boundaries
+
+- `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence.
+- `src/agent/AgentRunner.ts` owns the provider/tool-call iteration loop.
+- `src/providers/*` must not execute tools.
+- `src/tools/*` must not know about providers or sessions.
+- `src/session/*` persists and trims message history; it must not parse prompts or call providers.
+- `src/agent/ContextBuilder.ts` builds prompt/messages only; it must not call tools or providers.
+- `src/skills/SkillsLoader.ts` reads skill metadata and content only; it must not execute skills.
+
+## Runtime Data
+
+Local runtime data lives under:
+
+```text
+.mini-agent/
+```
+
+This directory is git-ignored. Do not commit local config, API keys, or session JSONL files.
+
+## Tooling Rules
+
+- Prefer `rg` for code search.
+- Keep edits scoped to the requested behavior.
+- Add focused tests for new behavior.
+- Use ASCII in source files unless a file already uses non-ASCII or user-facing text requires it.
+- Do not change generated `dist/` files manually; run `npm run build`.
+
+## CLI Expectations
+
+The CLI should:
+
+- create `.mini-agent/config.json` on first run,
+- use the configured OpenAI-compatible provider,
+- save sessions to `.mini-agent/workspace/sessions/{key}.jsonl`,
+- support `--resume` by printing previous user/assistant messages,
+- continue conversations using previous session history,
+- support `/exit` and `/quit`.
+
+## Built-In Tool Expectations
+
+Default tools should stay workspace-scoped:
+
+- `read_file`
+- `write_file`
+- `list_dir`
+- `find_files`
+- `grep`
+- `web_fetch`
+- `web_search`
+
+File tools must reject paths that escape the workspace.

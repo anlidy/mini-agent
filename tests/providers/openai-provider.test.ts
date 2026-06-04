@@ -130,4 +130,21 @@ describe("OpenAIProvider", () => {
     await expect(provider.chat({ messages: [{ role: "user", content: "hi" }] }))
       .rejects.toThrow("OpenAI-compatible request failed: 401 Unauthorized: {\"error\":{\"message\":\"bad key\"}}");
   });
+
+  it("aborts requests after the configured timeout", async () => {
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      model: "test-model",
+      timeoutMs: 1,
+      fetch: async (_url, init) => new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal instanceof AbortSignal) {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        }
+      })
+    });
+
+    await expect(provider.chat({ messages: [{ role: "user", content: "hi" }] }))
+      .rejects.toThrow("OpenAI-compatible request timed out after 1ms");
+  });
 });
