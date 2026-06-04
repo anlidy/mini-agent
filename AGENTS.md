@@ -44,6 +44,8 @@ Local runtime data lives under:
 
 This directory is git-ignored. Do not commit local config, API keys, or session JSONL files.
 
+Never hard-code or expose API keys, tokens, credentials, local provider secrets, or real config values in git-committable source, tests, docs, fixtures, generated defaults, or examples. Use placeholders, omitted fields, environment variables, or `.mini-agent/config.json` values that remain local and git-ignored.
+
 ## Tooling Rules
 
 - Prefer `rg` for code search.
