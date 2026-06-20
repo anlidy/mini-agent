@@ -2,7 +2,7 @@
 
 A TypeScript AI agent — personal coding assistant with CLI, tool-calling, and extensible architecture.
 
-`mini-agent` is a self-contained agent runtime built from scratch in TypeScript. It combines an LLM-powered agent loop with a set of built-in tools (file operations, search, web fetch) to help you work with codebases directly from the terminal. Streaming and a Web UI are planned — see `docs/ROADMAP.md`.
+`mini-agent` is a self-contained agent runtime built from scratch in TypeScript. It combines an LLM-powered agent loop with a set of built-in tools (file operations, search, web fetch) to help you work with codebases from the terminal or through the local Web UI backend. Frontend work is tracked in `docs/ROADMAP.md`.
 
 ## Features
 
@@ -18,6 +18,7 @@ A TypeScript AI agent — personal coding assistant with CLI, tool-calling, and 
 - **Skills Framework** — workspace-level skills with YAML frontmatter and auto-injection
 - **Hook System** — lifecycle hooks for tool execution, iteration tracking, and custom middleware
 - **CLI REPL** — interactive terminal interface with session resume and `--stream` support
+- **Web UI Backend** — local HTTP/WebSocket server with session, config, tool, file, streaming, and exec-approval APIs
 
 ## Requirements
 
@@ -82,6 +83,38 @@ Inside the REPL:
 - `/tool <name> <json>` — run a tool directly, no model call (e.g. `/tool apply_patch {"patch":"..."}`).
 - `/exit` or `/quit` — leave.
 - `Ctrl-C` during a turn interrupts it gracefully; again (or when idle) exits.
+
+## Web UI Backend
+
+Start the local backend:
+
+```bash
+npm run build
+node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
+```
+
+The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It also serves static frontend build output from `web-ui/dist` when that directory exists.
+
+REST API:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sessions` | List saved sessions |
+| `GET` | `/api/sessions/:key` | Read a full session |
+| `DELETE` | `/api/sessions/:key` | Delete a session JSONL file |
+| `GET` | `/api/config` | Read config with `provider.apiKey` redacted to `***` |
+| `PUT` | `/api/config` | Write provider/agent/search/exec config patches atomically |
+| `GET` | `/api/tools` | List configured tool definitions |
+| `GET` | `/api/files/tree?path=.` | Read a workspace-contained directory tree |
+| `GET` | `/api/files/content?path=README.md` | Read workspace-contained file content |
+
+WebSocket:
+
+```text
+ws://127.0.0.1:3210/ws?session=default
+```
+
+Client messages are `user_message`, `abort`, and `approve_command`. Server messages include `session`, streamed agent events (`token`, `tool_call`, `tool_result`, `done`, `error`), `approve_request`, and `turn_rejected`. Only one turn can run at a time per connection.
 
 ## Verifying the runtime (Phase 2)
 
@@ -198,6 +231,7 @@ npm run repl        # start CLI REPL
 npm run build       # compile TypeScript to dist/ and copy prompt templates
 npm test            # run Vitest tests
 npm run typecheck   # run TypeScript type checking
+node dist/server.js # start the local HTTP/WebSocket backend after build
 ```
 
 ## Architecture
@@ -208,6 +242,7 @@ src/
   config/      config defaults and .mini-agent/config.json loading
   providers/   OpenAI-compatible provider abstraction
   session/     JSONL session persistence
+  server/      local HTTP/WebSocket backend for the Web UI
   skills/      workspace skills discovery and summary
   tools/       tool registry and built-in tools
   prompts/     system prompt templates

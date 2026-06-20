@@ -22,6 +22,7 @@ After build:
 
 ```bash
 node dist/cli.js --session default --resume
+node dist/server.js --workspace . --host 127.0.0.1 --port 3210
 ```
 
 ## Architecture Boundaries
@@ -33,6 +34,7 @@ node dist/cli.js --session default --resume
 - `src/session/*` persists and trims message history; must not parse prompts or call providers.
 - `src/agent/ContextBuilder.ts` builds prompt/messages only; must not call tools or providers.
 - `src/skills/SkillsLoader.ts` reads skill metadata and content only; must not execute skills.
+- `src/server/*` is a thin HTTP/WebSocket driver. It may call `AgentLoop`, `SessionManager`, config helpers, and `ToolRegistry` factories, but must not execute tools directly or parse prompts.
 
 ## Runtime Data
 
@@ -67,6 +69,19 @@ The CLI should:
 - continue conversations using previous session history,
 - support `/help`, `/tools`, `/tool <name> <json>`, `/exit`, and `/quit`,
 - abort the in-flight turn on `Ctrl-C` (and exit when idle).
+
+## Web Backend Expectations
+
+The local server should:
+
+- bind to `127.0.0.1` by default,
+- expose REST routes under `/api` with JSON `{ error }` failures,
+- redact `provider.apiKey` from `GET /api/config`,
+- preserve the real API key when `PUT /api/config` receives `***`,
+- keep file tree/content APIs workspace-scoped and read-only,
+- use one active turn per WebSocket connection and reject overlaps with `turn_rejected`,
+- bridge `exec` approvals through the same WebSocket connection,
+- abort in-flight turns and reject pending approvals on connection close.
 
 ## Built-In Tool Expectations
 

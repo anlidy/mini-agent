@@ -89,12 +89,16 @@ Surfaces the runtime additions so each feature is verifiable from the terminal.
 
 ## Phase 3 — Web UI
 
-### Backend
+### Backend ✅
 
-- [ ] Express/WebSocket server wrapping AgentLoop
-- [ ] REST API: sessions list, session history, config read/write
-- [ ] WebSocket: streaming agent events, real-time tool call display
-- [ ] File system API: directory tree, file content reading
+Completed as a local Node HTTP/WebSocket backend. The implementation uses Node's
+native `http` server and a small WebSocket adapter, not Express.
+
+- [x] HTTP/WebSocket server wrapping AgentLoop
+- [x] REST API: sessions list, session history, session delete, config read/write
+- [x] WebSocket: streaming agent events, turn rejection, abort, exec approval bridge
+- [x] File system API: directory tree, file content reading
+- [x] Static frontend build serving with SPA fallback
 
 ### Frontend
 

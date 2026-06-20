@@ -5,7 +5,7 @@ mini-agent is a TypeScript agent runtime organized into focused, single-responsi
 ## Module Map
 
 ```text
-CLI / REPL
+CLI / REPL            Web UI Backend
     │
     ▼
 AgentLoop ──▶ ContextBuilder ──▶ prompts/ (identity, tool contract, skills)
@@ -47,6 +47,38 @@ Commands are dispatched before reaching the agent:
 `Ctrl-C` aborts the in-flight turn through a per-turn `AbortController` whose signal is threaded into `run`/`stream`; pressing it while idle exits.
 
 Boundary: the CLI is a thin driver. It never coordinates subsystems itself — that is AgentLoop's job — and depends only on `AgentLoop.run`/`stream` and the `ToolRegistry` interface. The `/tool` command deliberately bypasses the agent loop to exercise a tool in isolation; it is a verification aid, not a runtime path.
+
+### Web UI Backend (`src/server/`, `src/server.ts`)
+
+The Web UI backend is a second thin driver beside the CLI. It starts a native Node `http.Server`, handles WebSocket upgrades, and translates browser protocol messages into `AgentLoop.stream()` calls. It does not parse prompts, execute tools directly, or reach into runtime internals.
+
+Entry points:
+
+- `createServer(options)` — builds an HTTP server with REST routes, WebSocket upgrade handling, and static file serving.
+- `startServer(options)` — creates and listens in one call.
+- `src/server.ts` — executable wrapper (`node dist/server.js --workspace <dir> --host 127.0.0.1 --port 3210`).
+
+REST routes:
+
+| Method | Path | Handler |
+|---|---|---|
+| `GET` | `/api/sessions` | `SessionManager.listSessions()` |
+| `GET` | `/api/sessions/:key` | `SessionManager.getOrCreate()` |
+| `DELETE` | `/api/sessions/:key` | `SessionManager.deleteSession()` |
+| `GET` | `/api/config` | redacted in-memory config |
+| `PUT` | `/api/config` | `writeConfig()` + in-memory version bump |
+| `GET` | `/api/tools` | configured `ToolRegistry.getDefinitions()` |
+| `GET` | `/api/files/tree?path=` | read-only workspace-contained file tree |
+| `GET` | `/api/files/content?path=` | read-only workspace-contained file content |
+
+The WebSocket endpoint is `/ws?session=<key>`. Each connection owns one session view, one `AgentLoop`, and one per-connection `ToolRegistry`. Incoming `user_message` starts a streamed turn; `abort` cancels the in-flight turn; `approve_command` resolves a pending exec approval request. A second `user_message` while a turn is active returns `turn_rejected`.
+
+Config is global per server instance. `PUT /api/config` writes `.mini-agent/config.json` atomically and bumps an in-memory version. Connections compare that version before the next turn and rebuild their `AgentLoop` when needed; active turns are not interrupted.
+
+Security invariants:
+
+- File APIs use the same workspace-prefix path containment rule as file tools.
+- `GET /api/config` never returns plaintext API keys; `PUT /api/config` preserves the stored key when the client sends the redaction sentinel `***`.
 
 ### AgentLoop (`src/agent/AgentLoop.ts`)
 
@@ -132,6 +164,8 @@ JSONL-based persistence with atomic writes:
 - History trimming by message count and character budget
 - Drops leading tool messages so trimmed history never starts with an orphan tool result
 - Corrupted JSONL lines are silently skipped on load
+- Session listing returns `{ key, createdAt, updatedAt, messageCount, preview }[]`
+- Session deletion removes the JSONL file and clears the in-memory cache entry
 
 ### ContextBuilder (`src/agent/ContextBuilder.ts`)
 
@@ -164,6 +198,7 @@ Loads, merges, and validates configuration:
 - `defaultConfig()` — hardcoded defaults (the source of concrete values like the provider name and base URL)
 - `loadConfig()` — reads `.mini-agent/config.json`, deep-merges over the defaults, then validates the result against a zod schema (`src/config/schema.ts`), reporting all issues with dotted paths and rejecting unknown keys
 - `ensureDefaultConfig()` — auto-creates the config file on first run
+- `writeConfig()` — writes validated provider/agent/search/exec config patches atomically and preserves stored API keys when a UI round-trip sends `***`
 - Optional `search` and `exec` blocks configure the web search backend and the opt-in exec tool
 
 A missing API key is surfaced early by `AgentLoop` (from config or `MINI_AGENT_API_KEY`) instead of failing at the first request. Token accounting uses a pluggable `TokenCounter` (`src/agent/tokens.ts`); real provider `usage` flows through `RunResult`.
@@ -181,7 +216,7 @@ Used for logging, monitoring, and approval flows.
 ## Data Flow
 
 ```text
-CLI / REPL (parse args, load+validate config, dispatch /commands)
+CLI / REPL or Web UI Backend (parse protocol, load+validate config)
     │  plain input → AgentLoop.run()  (or .stream() with --stream)
     ▼
 ContextBuilder.buildMessages()
@@ -193,7 +228,7 @@ AgentRunner.run() / runStream()
 Final Response (+ usage) + Session Save
 ```
 
-For `--stream`, AgentRunner yields `AgentEvent`s (token/tool_call/tool_result/done) that the CLI prints live; the terminal `done` carries the same result `run()` would return.
+For `--stream` and WebSocket turns, AgentRunner yields `AgentEvent`s (token/tool_call/tool_result/done) that the driver forwards to its client; the terminal `done` carries the same result `run()` would return.
 
 ## Design Principles
 
