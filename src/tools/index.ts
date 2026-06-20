@@ -1,5 +1,6 @@
 import { createFilesystemTools } from "./filesystem.js";
 import { createExecTool, type ExecToolOptions } from "./exec.js";
+import { createPatchTool } from "./patch.js";
 import { createSearchTools } from "./search.js";
 import { ToolRegistry } from "./ToolRegistry.js";
 import { createWebTools, type WebSearchConfig } from "./web.js";
@@ -19,7 +20,9 @@ export function createDefaultToolRegistry(options: ToolRegistryOptions = {}): To
   const tools = [
     ...createFilesystemTools(),
     ...createSearchTools(),
-    ...createWebTools({ fetch: options.fetch, search: options.search })
+    ...createWebTools({ fetch: options.fetch, search: options.search }),
+    // apply_patch writes only inside the workspace (same risk as write_file).
+    createPatchTool()
   ];
   // exec runs arbitrary shell commands, so it is opt-in via config (default off).
   if (options.exec?.enabled) {
