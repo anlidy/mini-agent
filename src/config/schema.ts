@@ -47,6 +47,14 @@ const searchSchema = z
   })
   .strict();
 
+const execSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    timeoutMs: z.number().int().positive().max(600_000).default(30_000),
+    maxOutputChars: z.number().int().positive().default(32_000)
+  })
+  .strict();
+
 function configSchema(workspace: string) {
   return z
     .object({
@@ -54,7 +62,8 @@ function configSchema(workspace: string) {
       provider: providerSchema.prefault({}),
       agent: agentSchema.prefault({}),
       sessions: sessionsSchema.prefault({ dir: defaultSessionsDir(workspace) }),
-      search: searchSchema.optional()
+      search: searchSchema.optional(),
+      exec: execSchema.optional()
     })
     .strict();
 }

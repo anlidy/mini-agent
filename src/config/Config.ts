@@ -22,4 +22,9 @@ export interface Config {
     backend: "duckduckgo" | "none";
     maxResults: number;
   };
+  exec?: {
+    enabled: boolean;
+    timeoutMs: number;
+    maxOutputChars: number;
+  };
 }

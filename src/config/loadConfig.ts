@@ -61,7 +61,8 @@ export async function loadConfig(workspace = process.cwd()): Promise<Config> {
       ...defaults.sessions,
       ...parsed.sessions
     },
-    ...(parsed.search ? { search: parsed.search } : {})
+    ...(parsed.search ? { search: parsed.search } : {}),
+    ...(parsed.exec ? { exec: parsed.exec } : {})
   };
   return parseConfig(merged, workspace);
 }

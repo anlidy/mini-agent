@@ -47,7 +47,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     model: config.provider.model,
     maxIterations: config.agent.maxIterations,
     maxToolResultChars: config.agent.maxToolResultChars,
-    tools: createDefaultToolRegistry({ search: config.search }),
+    tools: createDefaultToolRegistry({ search: config.search, exec: config.exec }),
     provider: new OpenAIProvider({
       apiKey: config.provider.apiKey ?? "",
       baseUrl: config.provider.baseUrl,
