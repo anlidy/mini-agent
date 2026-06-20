@@ -16,6 +16,8 @@ export type {
   ToolCallRequest
 } from "./providers/Provider.js";
 export { SessionManager } from "./session/SessionManager.js";
+export { createServer, startServer } from "./server/index.js";
+export type { CreateServerOptions, MiniAgentServer } from "./server/index.js";
 export { createDefaultToolRegistry } from "./tools/index.js";
 
 export const version = "0.1.0";

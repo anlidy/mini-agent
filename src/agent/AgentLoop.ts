@@ -29,6 +29,7 @@ export class AgentLoop implements Agent {
   private readonly maxToolResultChars?: number;
   private readonly provider?: LLMProvider;
   private readonly tools: ToolRegistry;
+  private readonly approveCommand?: (command: string) => Promise<boolean> | boolean;
   private sessions?: SessionManager;
   private readonly sessionsDir?: string;
   private readonly defaultSessionKey?: string;
@@ -40,6 +41,7 @@ export class AgentLoop implements Agent {
     this.maxToolResultChars = options.maxToolResultChars;
     this.provider = options.provider;
     this.tools = options.tools ?? createDefaultToolRegistry();
+    this.approveCommand = options.approveCommand;
     this.sessionsDir = options.sessionsDir;
     this.defaultSessionKey = options.sessionKey;
   }
@@ -97,6 +99,7 @@ export class AgentLoop implements Agent {
       maxToolResultChars: this.maxToolResultChars ?? config.agent.maxToolResultChars,
       workspace: this.workspace,
       contextWindowTokens: config.agent.contextWindowTokens,
+      approveCommand: options.approveCommand ?? this.approveCommand,
       signal: options.signal
     };
     return { runner: new AgentRunner(provider), spec, sessions, session, sessionKey, input, initialMessages };

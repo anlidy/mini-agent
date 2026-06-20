@@ -17,6 +17,7 @@ export interface AgentRunSpec {
   contextWindowTokens?: number;
   compactToolResultsKeepRecent?: number;
   tokenCounter?: TokenCounter;
+  approveCommand?: (command: string) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }
 
@@ -132,7 +133,7 @@ export class AgentRunner {
           const result = await spec.tools.execute(
             toolCall.name,
             toolCall.arguments,
-            { workspace: spec.workspace ?? process.cwd() }
+            { workspace: spec.workspace ?? process.cwd(), approveCommand: spec.approveCommand }
           );
           const content = normalizeToolResult(result, spec.maxToolResultChars);
           hookContext.toolResults.push(content);

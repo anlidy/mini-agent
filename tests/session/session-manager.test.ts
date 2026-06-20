@@ -47,4 +47,42 @@ describe("SessionManager", () => {
       { role: "user", content: "three" }
     ]);
   });
+
+  it("lists session summaries sorted by update time and previews the first user message", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-list-sessions-"));
+    const manager = new SessionManager({ workspace });
+    const alpha = await manager.getOrCreate("alpha");
+    alpha.messages.push(
+      { role: "assistant", content: "ignored", timestamp: "2026-06-04T00:00:00.000Z" },
+      { role: "user", content: "first user message that becomes the preview", timestamp: "2026-06-04T00:00:01.000Z" }
+    );
+    await manager.save(alpha);
+    const beta = await manager.getOrCreate("beta");
+    beta.messages.push({ role: "user", content: "newer", timestamp: "2026-06-04T00:00:02.000Z" });
+    await manager.save(beta);
+
+    const summaries = await manager.listSessions();
+
+    expect(summaries.map((summary) => summary.key)).toEqual(["beta", "alpha"]);
+    expect(summaries[1]).toMatchObject({
+      key: "alpha",
+      messageCount: 2,
+      preview: "first user message that becomes the preview"
+    });
+  });
+
+  it("deletes a session file and cached session idempotently", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-delete-session-"));
+    const manager = new SessionManager({ workspace });
+    const session = await manager.getOrCreate("delete-me");
+    session.messages.push({ role: "user", content: "bye", timestamp: "2026-06-04T00:00:00.000Z" });
+    await manager.save(session);
+
+    await manager.deleteSession("delete-me");
+    await manager.deleteSession("delete-me");
+
+    expect(await manager.listSessions()).toEqual([]);
+    const recreated = await manager.getOrCreate("delete-me");
+    expect(recreated.messages).toEqual([]);
+  });
 });

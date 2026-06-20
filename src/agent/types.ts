@@ -11,11 +11,13 @@ export interface AgentOptions {
   tools?: ToolRegistry;
   sessionKey?: string;
   sessionsDir?: string;
+  approveCommand?: (command: string) => Promise<boolean> | boolean;
 }
 
 export interface RunOptions {
   sessionKey?: string;
   signal?: AbortSignal;
+  approveCommand?: (command: string) => Promise<boolean> | boolean;
 }
 
 export interface RunResult {
