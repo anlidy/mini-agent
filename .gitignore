@@ -6,4 +6,5 @@ coverage/
 *.log
 sessions/
 .mini-agent/
+.claude
 .codex
