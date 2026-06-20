@@ -73,10 +73,51 @@ npm run build
 node dist/cli.js --session default --resume
 ```
 
+Flags: `--workspace <dir>`, `--session <key>`, `--resume` (print history first), `--stream` (print tokens live).
+
 Inside the REPL:
-- Type a message and press Enter.
-- Use `/exit` or `/quit` to leave.
-- Use `--resume` to print existing session history before continuing.
+- Type a message and press Enter to talk to the agent.
+- `/help` — list commands.
+- `/tools` — list registered tools (reflects your config: search backend, exec on/off).
+- `/tool <name> <json>` — run a tool directly, no model call (e.g. `/tool apply_patch {"patch":"..."}`).
+- `/exit` or `/quit` — leave.
+- `Ctrl-C` during a turn interrupts it gracefully; again (or when idle) exits.
+
+## Verifying the runtime (Phase 2)
+
+Most features can be exercised straight from the REPL. Tool plumbing, config
+validation, and abort need no API key; streaming and token usage need a live
+provider.
+
+No API key needed:
+
+```bash
+npm run repl -- --workspace /tmp/demo
+```
+
+- **Config validation** — put `{"agent":{"maxIterations":"lots"}}` in
+  `/tmp/demo/.mini-agent/config.json` and start the REPL. It prints
+  `Config error: ... agent.maxIterations: expected number ...` and exits cleanly.
+- **Tool registration** — `/tools` lists 8 tools by default (incl. `apply_patch`,
+  `web_search`). `exec` appears only when `exec.enabled` is true in config.
+- **apply_patch** — `/tool apply_patch {"patch":"--- /dev/null\n+++ b/x.txt\n@@ -0,0 +1,1 @@\n+hi"}`
+  creates `x.txt`. Add `"dryRun":true` to preview without writing.
+- **exec** (opt-in) — set `{"exec":{"enabled":true}}`, then
+  `/tool exec {"command":"echo hi"}`. Try `/tool exec {"command":"rm -rf /"}` to
+  see the deny list refuse it.
+- **web_search** — with no config it returns a "not configured" message; set
+  `{"search":{"backend":"duckduckgo"}}` and `/tool web_search {"query":"..."}`
+  returns ranked results (needs network).
+
+With an API key (`provider.apiKey` or `MINI_AGENT_API_KEY`):
+
+- **Streaming + events** — run with `--stream`; assistant tokens print live, then
+  a `usage>` line.
+- **Token usage** — every reply prints `usage> prompt_tokens=… completion_tokens=…`.
+- **Abort** — start a long turn and press `Ctrl-C`; it stops gracefully and
+  returns to the prompt instead of killing the process.
+- **Missing key** — unset the key and send a message: it fails fast with
+  `Missing provider API key`.
 
 ## Sessions
 

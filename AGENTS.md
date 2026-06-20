@@ -59,11 +59,14 @@ Never hard-code or expose API keys, tokens, credentials, local provider secrets,
 The CLI should:
 
 - create `.mini-agent/config.json` on first run,
+- print a clean `Config error:` message (not a stack trace) when config is invalid,
 - use the configured OpenAI-compatible provider,
 - save sessions to `.mini-agent/workspace/sessions/{key}.jsonl`,
 - support `--resume` by printing previous user/assistant messages,
+- support `--stream` to print assistant tokens live,
 - continue conversations using previous session history,
-- support `/exit` and `/quit`.
+- support `/help`, `/tools`, `/tool <name> <json>`, `/exit`, and `/quit`,
+- abort the in-flight turn on `Ctrl-C` (and exit when idle).
 
 ## Built-In Tool Expectations
 
