@@ -457,4 +457,50 @@ describe("AgentRunner", () => {
       toolsUsed: []
     });
   });
+
+  it("returns an aborted result without calling the provider when already aborted", async () => {
+    const provider = new ScriptedProvider([response({ content: "should not be used" })]);
+    const runner = new AgentRunner(provider);
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runner.run({
+      initialMessages: [{ role: "user", content: "hello" }],
+      tools: makeRegistry(),
+      model: "test-model",
+      maxIterations: 3,
+      maxToolResultChars: 1000,
+      workspace: "/tmp/workspace",
+      signal: controller.signal
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(provider.requests).toHaveLength(0);
+    expect(result.messages).toEqual([{ role: "user", content: "hello" }]);
+  });
+
+  it("stops gracefully with an aborted result when the provider call is aborted mid-run", async () => {
+    const controller = new AbortController();
+    const provider: LLMProvider = {
+      defaultModel: () => "test-model",
+      async chat() {
+        controller.abort();
+        throw new Error("aborted");
+      }
+    };
+    const runner = new AgentRunner(provider);
+
+    const result = await runner.run({
+      initialMessages: [{ role: "user", content: "hello" }],
+      tools: makeRegistry(),
+      model: "test-model",
+      maxIterations: 3,
+      maxToolResultChars: 1000,
+      workspace: "/tmp/workspace",
+      signal: controller.signal
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(result.error).toBeUndefined();
+  });
 });

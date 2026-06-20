@@ -147,4 +147,23 @@ describe("OpenAIProvider", () => {
     await expect(provider.chat({ messages: [{ role: "user", content: "hi" }] }))
       .rejects.toThrow("OpenAI-compatible request timed out after 1ms");
   });
+
+  it("aborts the request when the caller signal fires", async () => {
+    const controller = new AbortController();
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      model: "test-model",
+      timeoutMs: 10_000,
+      fetch: async (_url, init) => new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal instanceof AbortSignal) {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        }
+        setTimeout(() => controller.abort(new Error("user cancelled")), 1);
+      })
+    });
+
+    await expect(provider.chat({ messages: [{ role: "user", content: "hi" }], signal: controller.signal }))
+      .rejects.toThrow("OpenAI-compatible request was aborted");
+  });
 });

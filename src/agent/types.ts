@@ -14,6 +14,7 @@ export interface AgentOptions {
 
 export interface RunOptions {
   sessionKey?: string;
+  signal?: AbortSignal;
 }
 
 export interface RunResult {

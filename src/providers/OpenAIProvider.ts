@@ -34,10 +34,13 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async chat(request: ChatRequest): Promise<LLMResponse> {
-    const controller = new AbortController();
+    const timeoutController = new AbortController();
     const timeout = setTimeout(() => {
-      controller.abort(new Error(`OpenAI-compatible request timed out after ${this.timeoutMs}ms`));
+      timeoutController.abort(new Error(`OpenAI-compatible request timed out after ${this.timeoutMs}ms`));
     }, this.timeoutMs);
+    const signal = request.signal
+      ? AbortSignal.any([request.signal, timeoutController.signal])
+      : timeoutController.signal;
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
@@ -46,7 +49,7 @@ export class OpenAIProvider implements LLMProvider {
           "authorization": `Bearer ${this.apiKey}`,
           "content-type": "application/json"
         },
-        signal: controller.signal,
+        signal,
         body: JSON.stringify({
           model: request.model ?? this.model,
           messages: request.messages,
@@ -54,7 +57,10 @@ export class OpenAIProvider implements LLMProvider {
         })
       });
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (request.signal?.aborted) {
+        throw new Error("OpenAI-compatible request was aborted");
+      }
+      if (timeoutController.signal.aborted) {
         throw new Error(`OpenAI-compatible request timed out after ${this.timeoutMs}ms`);
       }
       throw error;

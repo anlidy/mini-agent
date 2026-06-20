@@ -63,7 +63,8 @@ export class AgentLoop implements Agent {
       maxIterations: this.maxIterations ?? config.agent.maxIterations,
       maxToolResultChars: this.maxToolResultChars ?? config.agent.maxToolResultChars,
       workspace: this.workspace,
-      contextWindowTokens: config.agent.contextWindowTokens
+      contextWindowTokens: config.agent.contextWindowTokens,
+      signal: options.signal
     });
     session.messages.push(toRecord({ role: "user", content: input }));
     for (const message of result.messages.slice(initialMessages.length)) {

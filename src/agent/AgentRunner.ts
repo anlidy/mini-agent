@@ -16,6 +16,7 @@ export interface AgentRunSpec {
   contextWindowTokens?: number;
   compactToolResultsKeepRecent?: number;
   tokenCounter?: TokenCounter;
+  signal?: AbortSignal;
 }
 
 export interface AgentRunResult {
@@ -23,7 +24,7 @@ export interface AgentRunResult {
   messages: AgentMessage[];
   toolsUsed: string[];
   usage: Record<string, number>;
-  stopReason: "completed" | "max_iterations" | "error";
+  stopReason: "completed" | "max_iterations" | "error" | "aborted";
   error?: string;
   toolEvents: Array<{ name: string; status: "ok" | "error"; detail: string }>;
 }
@@ -41,6 +42,9 @@ export class AgentRunner {
     let truncatedToolCallRecoveries = 0;
 
     for (let iteration = 0; iteration < spec.maxIterations; iteration += 1) {
+      if (spec.signal?.aborted) {
+        return abortedResult(messages, toolsUsed, usage, toolEvents);
+      }
       const hookContext: AgentHookContext = {
         iteration,
         messages,
@@ -53,9 +57,13 @@ export class AgentRunner {
         response = await this.provider.chat({
           messages: prepareMessagesForModel(messages, spec),
           tools: spec.tools.getDefinitions(),
-          model: spec.model
+          model: spec.model,
+          signal: spec.signal
         });
       } catch (error) {
+        if (spec.signal?.aborted) {
+          return abortedResult(messages, toolsUsed, usage, toolEvents);
+        }
         const finalContent = `Error calling LLM: ${error instanceof Error ? error.message : String(error)}`;
         messages.push({ role: "assistant", content: finalContent });
         hookContext.finalContent = finalContent;
@@ -174,6 +182,24 @@ const MISSING_TOOL_RESULT = "[Tool result unavailable - call was interrupted or 
 const COMPACTABLE_TOOLS = new Set(["read_file", "grep", "find_files", "web_search", "web_fetch", "list_dir"]);
 const DEFAULT_COMPACT_KEEP_RECENT = 10;
 const COMPACT_MIN_CHARS = 500;
+
+const ABORTED_MESSAGE = "Run aborted by caller.";
+
+function abortedResult(
+  messages: AgentMessage[],
+  toolsUsed: string[],
+  usage: Record<string, number>,
+  toolEvents: AgentRunResult["toolEvents"]
+): AgentRunResult {
+  return {
+    finalContent: ABORTED_MESSAGE,
+    messages,
+    toolsUsed,
+    usage,
+    stopReason: "aborted",
+    toolEvents
+  };
+}
 
 function prepareMessagesForModel(messages: AgentMessage[], spec: AgentRunSpec): AgentMessage[] {
   const counter = spec.tokenCounter ?? new HeuristicTokenCounter();

@@ -25,6 +25,7 @@ export interface ChatRequest {
   messages: Array<Record<string, unknown>>;
   tools?: Array<Record<string, unknown>>;
   model?: string;
+  signal?: AbortSignal;
 }
 
 export interface LLMProvider {
