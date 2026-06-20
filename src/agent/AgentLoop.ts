@@ -73,7 +73,8 @@ export class AgentLoop implements Agent {
     return {
       content: result.finalContent ?? "",
       sessionKey,
-      toolsUsed: result.toolsUsed
+      toolsUsed: result.toolsUsed,
+      usage: result.usage
     };
   }
 

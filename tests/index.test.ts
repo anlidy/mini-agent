@@ -27,7 +27,8 @@ describe("package entrypoint", () => {
     expect(result).toEqual({
       content: "hello from provider",
       sessionKey: "test:default",
-      toolsUsed: []
+      toolsUsed: [],
+      usage: {}
     });
   });
 });

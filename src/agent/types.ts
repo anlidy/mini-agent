@@ -20,6 +20,7 @@ export interface RunResult {
   content: string;
   sessionKey: string;
   toolsUsed: string[];
+  usage: Record<string, number>;
 }
 
 export interface Agent {

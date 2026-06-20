@@ -338,7 +338,7 @@ describe("AgentRunner", () => {
       role: "tool",
       tool_call_id: "old",
       name: "read_file",
-      content: "[read_file result omitted from context]"
+      content: `[read_file result summarized: ${"x".repeat(120)}...]`
     });
     expect(provider.requests[0]?.messages[3]).toEqual(initialMessages[3]);
   });

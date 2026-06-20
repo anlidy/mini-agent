@@ -92,7 +92,19 @@ async function handleLine(
   if (result.toolsUsed.length > 0) {
     await writeOutput(output, `tools> ${result.toolsUsed.join(", ")}\n`);
   }
+  const usageLine = formatUsage(result.usage);
+  if (usageLine) {
+    await writeOutput(output, `usage> ${usageLine}\n`);
+  }
   return false;
+}
+
+function formatUsage(usage: Record<string, number>): string {
+  const entries = Object.entries(usage).filter(([, value]) => Number.isFinite(value) && value > 0);
+  if (entries.length === 0) {
+    return "";
+  }
+  return entries.map(([key, value]) => `${key}=${value}`).join(" ");
 }
 
 function parseArgs(argv: string[]): CliArgs {

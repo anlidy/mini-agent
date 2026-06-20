@@ -1,6 +1,7 @@
 import { shouldExecuteToolCalls, type LLMProvider, type LLMResponse, type ToolCallRequest } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import { AgentHook, type AgentHookContext } from "./hooks.js";
+import { HeuristicTokenCounter, estimateMessagesTokens, estimateMessageTokens, type TokenCounter } from "./tokens.js";
 
 export type AgentMessage = Record<string, unknown>;
 
@@ -14,6 +15,7 @@ export interface AgentRunSpec {
   hook?: AgentHook;
   contextWindowTokens?: number;
   compactToolResultsKeepRecent?: number;
+  tokenCounter?: TokenCounter;
 }
 
 export interface AgentRunResult {
@@ -174,11 +176,12 @@ const DEFAULT_COMPACT_KEEP_RECENT = 10;
 const COMPACT_MIN_CHARS = 500;
 
 function prepareMessagesForModel(messages: AgentMessage[], spec: AgentRunSpec): AgentMessage[] {
+  const counter = spec.tokenCounter ?? new HeuristicTokenCounter();
   let prepared = messages.map((message) => ({ ...message }));
   prepared = dropOrphanToolResults(prepared);
   prepared = backfillMissingToolResults(prepared);
   prepared = compactOldToolResults(prepared, spec.compactToolResultsKeepRecent ?? DEFAULT_COMPACT_KEEP_RECENT);
-  prepared = trimToContextBudget(prepared, spec.contextWindowTokens);
+  prepared = trimToContextBudget(prepared, counter, spec.contextWindowTokens);
   prepared = dropOrphanToolResults(prepared);
   prepared = backfillMissingToolResults(prepared);
   return prepared;
@@ -310,12 +313,12 @@ function compactOldToolResults(messages: AgentMessage[], keepRecent: number): Ag
     }
     return {
       ...message,
-      content: `[${String(message.name)} result omitted from context]`
+      content: `[${String(message.name)} result summarized: ${summarizeToolResult(message.content)}]`
     };
   });
 }
 
-function trimToContextBudget(messages: AgentMessage[], contextWindowTokens?: number): AgentMessage[] {
+function trimToContextBudget(messages: AgentMessage[], counter: TokenCounter, contextWindowTokens?: number): AgentMessage[] {
   if (!contextWindowTokens || contextWindowTokens <= 0) {
     return messages;
   }
@@ -323,14 +326,14 @@ function trimToContextBudget(messages: AgentMessage[], contextWindowTokens?: num
   const systemMessages = messages.filter((message) => message.role === "system");
   const nonSystem = messages.filter((message) => message.role !== "system");
   const kept: AgentMessage[] = [];
-  let used = estimateMessagesTokens(systemMessages);
+  let used = estimateMessagesTokens(counter, systemMessages);
 
   for (let index = nonSystem.length - 1; index >= 0; index -= 1) {
     const message = nonSystem[index];
     if (!message) {
       continue;
     }
-    const tokens = estimateMessageTokens(message);
+    const tokens = estimateMessageTokens(counter, message);
     if (kept.length > 0 && used + tokens > contextWindowTokens) {
       break;
     }
@@ -341,14 +344,6 @@ function trimToContextBudget(messages: AgentMessage[], contextWindowTokens?: num
   const firstUserIndex = kept.findIndex((message) => message.role === "user");
   const aligned = firstUserIndex > 0 ? kept.slice(firstUserIndex) : kept;
   return [...systemMessages, ...aligned];
-}
-
-function estimateMessagesTokens(messages: AgentMessage[]): number {
-  return messages.reduce((total, message) => total + estimateMessageTokens(message), 0);
-}
-
-function estimateMessageTokens(message: AgentMessage): number {
-  return Math.max(1, Math.ceil(JSON.stringify(message).length / 4));
 }
 
 function extractToolCalls(message: AgentMessage): Array<{ id: string; name: string }> {
