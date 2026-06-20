@@ -14,7 +14,7 @@ export function defaultConfig(workspace = process.cwd()): Config {
       timeoutMs: 60_000
     },
     agent: {
-      maxIterations: 10,
+      maxIterations: 100,
       maxToolResultChars: 64_000,
       contextWindowTokens: 32_000
     },

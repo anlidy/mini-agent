@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agent/AgentLoop.js";
 import { defaultConfig } from "../../src/config/loadConfig.js";
 import { OpenAIProvider } from "../../src/providers/OpenAIProvider.js";
+import { ToolRegistry } from "../../src/tools/ToolRegistry.js";
 import type { ChatRequest, LLMProvider, LLMResponse, ProviderStreamEvent } from "../../src/providers/Provider.js";
 import type { AgentEvent } from "../../src/agent/events.js";
 
@@ -160,5 +161,52 @@ describe("AgentLoop", () => {
 
     const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "stream.jsonl");
     await expect(readFile(sessionPath, "utf8")).resolves.toContain("Hello");
+  });
+
+  it("re-reads maxIterations from config.json each turn instead of snapshotting it", async () => {
+    // Regression: the CLI used to pass config.agent.maxIterations into the
+    // AgentLoop constructor, which froze it for the whole process. prepare()'s
+    // `this.maxIterations ?? config.agent.maxIterations` then ignored any later
+    // edits to config.json. When no constructor value is given, prepare() must
+    // pick up the on-disk value on every run.
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-iter-"));
+    await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
+    const configPath = path.join(workspace, ".mini-agent", "config.json");
+    const writeMaxIterations = async (maxIterations: number): Promise<void> => {
+      const config = defaultConfig(workspace);
+      config.provider.apiKey = "k";
+      config.agent.maxIterations = maxIterations;
+      await writeFile(configPath, `${JSON.stringify(config)}\n`, "utf8");
+    };
+
+    // A provider that always asks for a tool call, so the loop only ends when it
+    // hits maxIterations. The tool is unregistered, so execute() returns an error
+    // string (never throws) and the loop keeps going until the cap.
+    let calls = 0;
+    const provider: LLMProvider = {
+      defaultModel: () => "loop-model",
+      async chat(): Promise<LLMResponse> {
+        calls += 1;
+        return response({
+          finishReason: "tool_calls",
+          toolCalls: [{ id: `call_${calls}`, name: "missing_tool", arguments: {} }]
+        });
+      }
+    };
+
+    // No maxIterations in the constructor -> prepare() must read it from config.
+    const agent = new AgentLoop({ workspace, provider, tools: new ToolRegistry(), sessionKey: "iter" });
+
+    await writeMaxIterations(2);
+    const first = await agent.run("go");
+    expect(first.content).toBe("Maximum tool iterations reached.");
+    expect(calls).toBe(2);
+
+    // Editing config between turns must change the cap on the very next run.
+    calls = 0;
+    await writeMaxIterations(4);
+    const second = await agent.run("go again");
+    expect(second.content).toBe("Maximum tool iterations reached.");
+    expect(calls).toBe(4);
   });
 });

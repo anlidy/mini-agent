@@ -8,7 +8,7 @@ describe("config schema validation", () => {
     const workspace = "/tmp/ws";
     const parsed = parseConfig(defaultConfig(workspace), workspace);
     expect(parsed.provider.model).toBe("deepseek-chat");
-    expect(parsed.agent.maxIterations).toBe(10);
+    expect(parsed.agent.maxIterations).toBe(100);
   });
 
   it("fills defaults for omitted optional sections", () => {

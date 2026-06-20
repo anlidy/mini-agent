@@ -67,13 +67,17 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   }
 
   const registry = createDefaultToolRegistry({ search: config.search, exec: config.exec });
+  // NOTE: maxIterations / maxToolResultChars are intentionally NOT passed here.
+  // AgentLoop is constructed once for the whole REPL session, so any constructor
+  // value would be a startup snapshot that AgentLoop.prepare()'s `?? config…`
+  // fallback can never override. Omitting them lets prepare() re-read these from
+  // .mini-agent/config.json every turn, so editing the file takes effect on the
+  // next message without restarting the REPL.
   const agent = new AgentLoop({
     workspace: config.workspace,
     sessionKey: args.session,
     sessionsDir: config.sessions.dir,
     model: config.provider.model,
-    maxIterations: config.agent.maxIterations,
-    maxToolResultChars: config.agent.maxToolResultChars,
     tools: registry,
     provider: new OpenAIProvider({
       apiKey: config.provider.apiKey ?? "",

@@ -25,7 +25,7 @@ const providerSchema = z
 
 const agentSchema = z
   .object({
-    maxIterations: z.number().int().positive().default(10),
+    maxIterations: z.number().int().positive().default(100),
     maxToolResultChars: z.number().int().positive().default(64_000),
     contextWindowTokens: z.number().int().positive().optional()
   })
