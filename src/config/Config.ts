@@ -18,4 +18,8 @@ export interface Config {
     maxHistoryMessages: number;
     maxHistoryChars: number;
   };
+  search?: {
+    backend: "duckduckgo" | "none";
+    maxResults: number;
+  };
 }

@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Config } from "./Config.js";
+import { parseConfig } from "./schema.js";
 
 export function defaultConfig(workspace = process.cwd()): Config {
   return {
@@ -46,7 +47,7 @@ export async function loadConfig(workspace = process.cwd()): Promise<Config> {
   const raw = await readFile(configFilePath(workspace), "utf8");
   const parsed = JSON.parse(raw) as Partial<Config>;
   const defaults = defaultConfig(workspace);
-  return {
+  const merged: Config = {
     workspace: parsed.workspace ?? workspace,
     provider: {
       ...defaults.provider,
@@ -59,8 +60,10 @@ export async function loadConfig(workspace = process.cwd()): Promise<Config> {
     sessions: {
       ...defaults.sessions,
       ...parsed.sessions
-    }
+    },
+    ...(parsed.search ? { search: parsed.search } : {})
   };
+  return parseConfig(merged, workspace);
 }
 
 export function configFilePath(workspace = process.cwd()): string {

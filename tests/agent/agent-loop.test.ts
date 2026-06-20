@@ -95,4 +95,41 @@ describe("AgentLoop", () => {
     expect(requests[0]?.model).toBe("deepseek-chat");
     await expect(readFile(path.join(config.sessions.dir, "default.jsonl"), "utf8")).resolves.toContain("configured");
   });
+
+  it("fails fast with an actionable error when no API key is configured and no provider is injected", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-nokey-"));
+    const previous = process.env.MINI_AGENT_API_KEY;
+    delete process.env.MINI_AGENT_API_KEY;
+    try {
+      const agent = new AgentLoop({ workspace });
+      await expect(agent.run("hello")).rejects.toThrow(/Missing provider API key/);
+    } finally {
+      if (previous !== undefined) {
+        process.env.MINI_AGENT_API_KEY = previous;
+      }
+    }
+  });
+
+  it("reads the API key from the MINI_AGENT_API_KEY env var when config omits it", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-envkey-"));
+    const previous = process.env.MINI_AGENT_API_KEY;
+    process.env.MINI_AGENT_API_KEY = "env-key";
+    const apiKeys: string[] = [];
+    vi.spyOn(OpenAIProvider.prototype, "chat").mockImplementation(async function(this: OpenAIProvider) {
+      apiKeys.push((this as unknown as { apiKey: string }).apiKey);
+      return response({ content: "ok" });
+    });
+    try {
+      const agent = new AgentLoop({ workspace });
+      const result = await agent.run("hello");
+      expect(result.content).toBe("ok");
+      expect(apiKeys).toEqual(["env-key"]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MINI_AGENT_API_KEY;
+      } else {
+        process.env.MINI_AGENT_API_KEY = previous;
+      }
+    }
+  });
 });

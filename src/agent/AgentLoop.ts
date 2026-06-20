@@ -39,7 +39,7 @@ export class AgentLoop implements Agent {
     const session = await sessions.getOrCreate(sessionKey);
     const model = this.model ?? config.provider.model ?? "deepseek-chat";
     const provider = this.provider ?? new OpenAIProvider({
-      apiKey: config.provider.apiKey ?? "",
+      apiKey: this.resolveApiKey(config.provider.apiKey),
       baseUrl: config.provider.baseUrl,
       model,
       timeoutMs: config.provider.timeoutMs
@@ -85,6 +85,22 @@ export class AgentLoop implements Agent {
       });
     }
     return this.sessions;
+  }
+
+  /**
+   * Resolve the provider API key from config or the MINI_AGENT_API_KEY env var.
+   * Fails fast with an actionable message instead of letting the first HTTP
+   * request return an opaque 401. Only reached when no provider was injected.
+   */
+  private resolveApiKey(configured?: string): string {
+    const apiKey = configured ?? process.env.MINI_AGENT_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Missing provider API key. Set provider.apiKey in .mini-agent/config.json " +
+        "or the MINI_AGENT_API_KEY environment variable."
+      );
+    }
+    return apiKey;
   }
 }
 
