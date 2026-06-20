@@ -7,6 +7,7 @@ import { AgentLoop } from "./agent/AgentLoop.js";
 import { ensureDefaultConfig } from "./config/loadConfig.js";
 import { OpenAIProvider } from "./providers/OpenAIProvider.js";
 import { SessionManager } from "./session/SessionManager.js";
+import { createDefaultToolRegistry } from "./tools/index.js";
 
 interface CliArgs {
   workspace: string;
@@ -46,6 +47,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     model: config.provider.model,
     maxIterations: config.agent.maxIterations,
     maxToolResultChars: config.agent.maxToolResultChars,
+    tools: createDefaultToolRegistry({ search: config.search }),
     provider: new OpenAIProvider({
       apiKey: config.provider.apiKey ?? "",
       baseUrl: config.provider.baseUrl,
