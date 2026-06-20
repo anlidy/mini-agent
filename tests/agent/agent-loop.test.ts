@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentLoop } from "../../src/agent/AgentLoop.js";
 import { defaultConfig } from "../../src/config/loadConfig.js";
 import { OpenAIProvider } from "../../src/providers/OpenAIProvider.js";
-import type { ChatRequest, LLMProvider, LLMResponse } from "../../src/providers/Provider.js";
+import type { ChatRequest, LLMProvider, LLMResponse, ProviderStreamEvent } from "../../src/providers/Provider.js";
+import type { AgentEvent } from "../../src/agent/events.js";
 
 class ScriptedProvider implements LLMProvider {
   readonly requests: ChatRequest[] = [];
@@ -131,5 +132,33 @@ describe("AgentLoop", () => {
         process.env.MINI_AGENT_API_KEY = previous;
       }
     }
+  });
+
+  it("streams token and done events and persists the session", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-stream-"));
+    const provider: LLMProvider = {
+      defaultModel: () => "stream-model",
+      async chat(): Promise<LLMResponse> {
+        throw new Error("chat should not be used while streaming");
+      },
+      async *chatStream(): AsyncIterable<ProviderStreamEvent> {
+        yield { type: "delta", content: "Hel" };
+        yield { type: "delta", content: "lo" };
+        yield { type: "done", response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: {} } };
+      }
+    };
+    const agent = new AgentLoop({ workspace, provider, sessionKey: "stream" });
+
+    const events: AgentEvent[] = [];
+    for await (const event of agent.stream("hi")) {
+      events.push(event);
+    }
+
+    expect(events.filter((event) => event.type === "token").map((event) => (event as { text: string }).text))
+      .toEqual(["Hel", "lo"]);
+    expect(events.at(-1)?.type).toBe("done");
+
+    const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "stream.jsonl");
+    await expect(readFile(sessionPath, "utf8")).resolves.toContain("Hello");
   });
 });

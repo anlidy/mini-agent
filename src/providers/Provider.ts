@@ -28,9 +28,19 @@ export interface ChatRequest {
   signal?: AbortSignal;
 }
 
+/**
+ * Incremental events from a streaming chat call. `delta` carries live content
+ * chunks; `done` carries the fully assembled response (content + tool calls +
+ * finish reason + usage) so callers never have to re-aggregate.
+ */
+export type ProviderStreamEvent =
+  | { type: "delta"; content: string }
+  | { type: "done"; response: LLMResponse };
+
 export interface LLMProvider {
   defaultModel(): string;
   chat(request: ChatRequest): Promise<LLMResponse>;
+  chatStream?(request: ChatRequest): AsyncIterable<ProviderStreamEvent>;
 }
 
 const KNOWN_FINISH_REASONS = new Set<FinishReason>([

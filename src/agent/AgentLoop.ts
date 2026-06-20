@@ -1,14 +1,26 @@
 import { ContextBuilder } from "./ContextBuilder.js";
-import { AgentRunner } from "./AgentRunner.js";
+import { AgentRunner, type AgentRunSpec, type AgentRunResult } from "./AgentRunner.js";
 import { ensureDefaultConfig } from "../config/loadConfig.js";
 import { OpenAIProvider } from "../providers/OpenAIProvider.js";
 import { SessionManager } from "../session/SessionManager.js";
 import { SkillsLoader } from "../skills/SkillsLoader.js";
 import { createDefaultToolRegistry } from "../tools/index.js";
 import type { Agent, AgentOptions, RunOptions, RunResult } from "./types.js";
+import type { AgentEvent } from "./events.js";
 import type { LLMProvider } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
-import type { MessageRecord } from "../session/Session.js";
+import type { MessageRecord, Session } from "../session/Session.js";
+
+/** Per-turn state shared between run() and stream(). */
+interface PreparedRun {
+  runner: AgentRunner;
+  spec: AgentRunSpec;
+  sessions: SessionManager;
+  session: Session;
+  sessionKey: string;
+  input: string;
+  initialMessages: AgentRunSpec["initialMessages"];
+}
 
 export class AgentLoop implements Agent {
   readonly workspace: string;
@@ -33,6 +45,28 @@ export class AgentLoop implements Agent {
   }
 
   async run(input: string, options: RunOptions = {}): Promise<RunResult> {
+    const prepared = await this.prepare(input, options);
+    const result = await prepared.runner.run(prepared.spec);
+    await this.persist(prepared, result);
+    return this.finish(prepared, result);
+  }
+
+  async *stream(input: string, options: RunOptions = {}): AsyncIterable<AgentEvent> {
+    const prepared = await this.prepare(input, options);
+    let result: AgentRunResult | undefined;
+    for await (const event of prepared.runner.runStream(prepared.spec)) {
+      if (event.type === "done") {
+        result = event.result;
+      }
+      yield event;
+    }
+    if (result) {
+      await this.persist(prepared, result);
+    }
+  }
+
+  /** Build session, provider, context, and the runner spec shared by run/stream. */
+  private async prepare(input: string, options: RunOptions): Promise<PreparedRun> {
     const config = await ensureDefaultConfig(this.workspace);
     const sessionKey = options.sessionKey ?? this.defaultSessionKey ?? config.sessions.defaultKey;
     const sessions = this.sessionManager(config.sessions.dir);
@@ -55,8 +89,7 @@ export class AgentLoop implements Agent {
       }),
       skillsSummary: await skills.summaryText()
     });
-    const runner = new AgentRunner(provider);
-    const result = await runner.run({
+    const spec: AgentRunSpec = {
       initialMessages,
       tools: this.tools,
       model,
@@ -65,15 +98,24 @@ export class AgentLoop implements Agent {
       workspace: this.workspace,
       contextWindowTokens: config.agent.contextWindowTokens,
       signal: options.signal
-    });
-    session.messages.push(toRecord({ role: "user", content: input }));
-    for (const message of result.messages.slice(initialMessages.length)) {
-      session.messages.push(toRecord(message));
+    };
+    return { runner: new AgentRunner(provider), spec, sessions, session, sessionKey, input, initialMessages };
+  }
+
+  /** Append the turn's messages to the session and persist it. */
+  private async persist(prepared: PreparedRun, result: AgentRunResult): Promise<void> {
+    prepared.session.messages.push(toRecord({ role: "user", content: prepared.input }));
+    for (const message of result.messages.slice(prepared.initialMessages.length)) {
+      prepared.session.messages.push(toRecord(message));
     }
-    await sessions.save(session);
+    await prepared.sessions.save(prepared.session);
+  }
+
+  /** Shape the RunResult returned to callers of run(). */
+  private finish(prepared: PreparedRun, result: AgentRunResult): RunResult {
     return {
       content: result.finalContent ?? "",
-      sessionKey,
+      sessionKey: prepared.sessionKey,
       toolsUsed: result.toolsUsed,
       usage: result.usage
     };

@@ -2,6 +2,7 @@ import { shouldExecuteToolCalls, type LLMProvider, type LLMResponse, type ToolCa
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import { AgentHook, type AgentHookContext } from "./hooks.js";
 import { HeuristicTokenCounter, estimateMessagesTokens, estimateMessageTokens, type TokenCounter } from "./tokens.js";
+import type { AgentEvent } from "./events.js";
 
 export type AgentMessage = Record<string, unknown>;
 
@@ -33,6 +34,24 @@ export class AgentRunner {
   constructor(private readonly provider: LLMProvider) {}
 
   async run(spec: AgentRunSpec): Promise<AgentRunResult> {
+    let result: AgentRunResult | undefined;
+    // run() never streams tokens: it forces the non-streaming chat() path so its
+    // behavior (and provider contract) is identical to before runStream existed.
+    for await (const event of this.execute(spec, false)) {
+      if (event.type === "done") {
+        result = event.result;
+      }
+    }
+    // execute() always emits exactly one terminal `done` event.
+    return result as AgentRunResult;
+  }
+
+  runStream(spec: AgentRunSpec): AsyncIterable<AgentEvent> {
+    // Prefer the provider's streaming path so callers receive live token events.
+    return this.execute(spec, true);
+  }
+
+  private async *execute(spec: AgentRunSpec, streaming: boolean): AsyncIterable<AgentEvent> {
     const messages = [...spec.initialMessages];
     const hook = spec.hook ?? new AgentHook();
     const toolsUsed: string[] = [];
@@ -43,7 +62,8 @@ export class AgentRunner {
 
     for (let iteration = 0; iteration < spec.maxIterations; iteration += 1) {
       if (spec.signal?.aborted) {
-        return abortedResult(messages, toolsUsed, usage, toolEvents);
+        yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents) };
+        return;
       }
       const hookContext: AgentHookContext = {
         iteration,
@@ -54,15 +74,11 @@ export class AgentRunner {
       await hook.beforeIteration(hookContext);
       let response: LLMResponse;
       try {
-        response = await this.provider.chat({
-          messages: prepareMessagesForModel(messages, spec),
-          tools: spec.tools.getDefinitions(),
-          model: spec.model,
-          signal: spec.signal
-        });
+        response = yield* this.streamResponse(spec, messages, streaming);
       } catch (error) {
         if (spec.signal?.aborted) {
-          return abortedResult(messages, toolsUsed, usage, toolEvents);
+          yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents) };
+          return;
         }
         const finalContent = `Error calling LLM: ${error instanceof Error ? error.message : String(error)}`;
         messages.push({ role: "assistant", content: finalContent });
@@ -70,15 +86,12 @@ export class AgentRunner {
         hookContext.stopReason = "error";
         hookContext.error = finalContent;
         await hook.afterIteration(hookContext);
-        return {
-          finalContent,
-          messages,
-          toolsUsed,
-          usage,
-          stopReason: "error",
-          error: finalContent,
-          toolEvents
+        yield { type: "error", error: finalContent };
+        yield {
+          type: "done",
+          result: { finalContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
         };
+        return;
       }
 
       accumulateUsage(usage, response.usage);
@@ -102,21 +115,19 @@ export class AgentRunner {
         hookContext.stopReason = "error";
         hookContext.error = finalContent;
         await hook.afterIteration(hookContext);
-        return {
-          finalContent,
-          messages,
-          toolsUsed,
-          usage,
-          stopReason: "error",
-          error: finalContent,
-          toolEvents
+        yield { type: "error", error: finalContent };
+        yield {
+          type: "done",
+          result: { finalContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
         };
+        return;
       }
 
       if (shouldExecuteTools(response)) {
         messages.push(buildAssistantToolCallMessage(response));
         await hook.beforeExecuteTools(hookContext);
         for (const toolCall of response.toolCalls) {
+          yield { type: "tool_call", id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments };
           toolsUsed.push(toolCall.name);
           const result = await spec.tools.execute(
             toolCall.name,
@@ -131,11 +142,9 @@ export class AgentRunner {
             name: toolCall.name,
             content
           });
-          toolEvents.push({
-            name: toolCall.name,
-            status: typeof content === "string" && content.startsWith("Error") ? "error" : "ok",
-            detail: summarizeToolResult(content)
-          });
+          const status = typeof content === "string" && content.startsWith("Error") ? "error" : "ok";
+          toolEvents.push({ name: toolCall.name, status, detail: summarizeToolResult(content) });
+          yield { type: "tool_result", id: toolCall.id, name: toolCall.name, status, content };
         }
         await hook.afterIteration(hookContext);
         continue;
@@ -155,26 +164,51 @@ export class AgentRunner {
       hookContext.finalContent = finalContent;
       hookContext.stopReason = "completed";
       await hook.afterIteration(hookContext);
-      return {
-        finalContent,
-        messages,
-        toolsUsed,
-        usage,
-        stopReason: "completed",
-        toolEvents
+      yield {
+        type: "done",
+        result: { finalContent, messages, toolsUsed, usage, stopReason: "completed", toolEvents }
       };
+      return;
     }
 
     const finalContent = "Maximum tool iterations reached.";
     messages.push({ role: "assistant", content: finalContent });
-    return {
-      finalContent,
-      messages,
-      toolsUsed,
-      usage,
-      stopReason: "max_iterations",
-      toolEvents
+    yield {
+      type: "done",
+      result: { finalContent, messages, toolsUsed, usage, stopReason: "max_iterations", toolEvents }
     };
+  }
+
+  /**
+   * Issue one provider call. When `streaming` is requested and the provider
+   * supports it, yields `token` events as content arrives and returns the
+   * assembled response. Otherwise issues a single non-streaming `chat()` call
+   * (no token events). The generator's return value is the final LLMResponse.
+   */
+  private async *streamResponse(spec: AgentRunSpec, messages: AgentMessage[], streaming: boolean): AsyncGenerator<AgentEvent, LLMResponse> {
+    const request = {
+      messages: prepareMessagesForModel(messages, spec),
+      tools: spec.tools.getDefinitions(),
+      model: spec.model,
+      signal: spec.signal
+    };
+    if (streaming && typeof this.provider.chatStream === "function") {
+      let assembled: LLMResponse | undefined;
+      for await (const event of this.provider.chatStream(request)) {
+        if (event.type === "delta") {
+          if (event.content.length > 0) {
+            yield { type: "token", text: event.content };
+          }
+        } else {
+          assembled = event.response;
+        }
+      }
+      if (!assembled) {
+        throw new Error("Streaming provider ended without a final response");
+      }
+      return assembled;
+    }
+    return this.provider.chat(request);
   }
 }
 

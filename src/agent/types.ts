@@ -1,5 +1,6 @@
 import type { LLMProvider } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
+import type { AgentEvent } from "./events.js";
 
 export interface AgentOptions {
   workspace?: string;
@@ -26,4 +27,5 @@ export interface RunResult {
 
 export interface Agent {
   run(input: string, options?: RunOptions): Promise<RunResult>;
+  stream?(input: string, options?: RunOptions): AsyncIterable<AgentEvent>;
 }

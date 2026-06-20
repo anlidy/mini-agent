@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { OpenAIProvider } from "../../src/providers/OpenAIProvider.js";
+import type { ProviderStreamEvent } from "../../src/providers/Provider.js";
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number; statusText?: string } = {}): Response {
   return {
@@ -14,6 +15,27 @@ function jsonResponse(body: unknown, init: { ok?: boolean; status?: number; stat
       return JSON.stringify(body);
     }
   } as Response;
+}
+
+function sseResponse(chunks: string[]): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    }
+  });
+  return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
+async function collectStream(iterable: AsyncIterable<ProviderStreamEvent>): Promise<ProviderStreamEvent[]> {
+  const events: ProviderStreamEvent[] = [];
+  for await (const event of iterable) {
+    events.push(event);
+  }
+  return events;
 }
 
 describe("OpenAIProvider", () => {
@@ -165,5 +187,52 @@ describe("OpenAIProvider", () => {
 
     await expect(provider.chat({ messages: [{ role: "user", content: "hi" }], signal: controller.signal }))
       .rejects.toThrow("OpenAI-compatible request was aborted");
+  });
+
+  it("streams content deltas and a final assembled response over SSE", async () => {
+    let requestBody: Record<string, unknown> = {};
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      model: "test-model",
+      fetch: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body));
+        return sseResponse([
+          "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n",
+          "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n",
+          "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"total_tokens\":7}}\n\n",
+          "data: [DONE]\n\n"
+        ]);
+      }
+    });
+
+    const events = await collectStream(provider.chatStream!({ messages: [{ role: "user", content: "hi" }] }));
+
+    expect(requestBody.stream).toBe(true);
+    expect(events.filter((event) => event.type === "delta").map((event) => (event as { content: string }).content))
+      .toEqual(["Hel", "lo"]);
+    const done = events.at(-1);
+    expect(done).toEqual({
+      type: "done",
+      response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: { total_tokens: 7 } }
+    });
+  });
+
+  it("assembles fragmented tool calls from the stream", async () => {
+    const provider = new OpenAIProvider({
+      apiKey: "test-key",
+      model: "test-model",
+      fetch: async () => sseResponse([
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\"}}]}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"a.ts\\\"}\"}}]}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+        "data: [DONE]\n\n"
+      ])
+    });
+
+    const events = await collectStream(provider.chatStream!({ messages: [{ role: "user", content: "read" }] }));
+    const done = events.at(-1) as { type: "done"; response: { toolCalls: unknown[]; finishReason: string } };
+
+    expect(done.response.finishReason).toBe("tool_calls");
+    expect(done.response.toolCalls).toEqual([{ id: "call_1", name: "read_file", arguments: { path: "a.ts" } }]);
   });
 });
