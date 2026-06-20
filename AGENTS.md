@@ -76,5 +76,11 @@ Default tools should stay workspace-scoped:
 - `grep`
 - `web_fetch`
 - `web_search`
+- `apply_patch`
 
 File tools must reject paths that escape the workspace.
+
+The `exec` tool (shell commands) is NOT registered by default. It is opt-in via
+`exec.enabled` in config, pins `cwd` to the workspace, refuses a deny list of
+destructive commands, and honors the `approveCommand` gate on the execution
+context. Keep it off unless a workflow explicitly needs it.

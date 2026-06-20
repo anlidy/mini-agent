@@ -15,60 +15,66 @@ Completed. See `docs/archive/` for the original scope and checklist.
 - CLI REPL with session resume
 - Config auto-generation on first run
 
-## Phase 2 — Runtime Enhancements (current)
+## Phase 2 — Runtime Enhancements ✅
 
-Core improvements needed before building the Web UI.
+Core improvements needed before building the Web UI. Completed on branch
+`worktree-phase2-opus-4.8`.
 
 ### Streaming Support
 
-- [ ] Add `chatStream()` to LLMProvider interface
-- [ ] Implement SSE parsing in OpenAIProvider
-- [ ] Add streaming mode to AgentRunner with token-level events
-- [ ] Agent interface: add `stream()` method alongside existing `run()`
+- [x] Add `chatStream()` to LLMProvider interface (optional method)
+- [x] Implement SSE parsing in OpenAIProvider
+- [x] Add streaming mode to AgentRunner with token-level events
+- [x] Agent interface: add `stream()` method alongside existing `run()`
 
 ### Abort / Cancel
 
-- [ ] Expose AbortController from AgentLoop
-- [ ] Wire abort signal through to provider HTTP requests
-- [ ] Graceful stop — exit iteration loop cleanly on abort
+- [x] Thread an `AbortSignal` from AgentLoop.run/stream options
+- [x] Wire abort signal through to provider HTTP requests (composed with timeout)
+- [x] Graceful stop — exit iteration loop cleanly on abort (`stopReason: "aborted"`)
 
 ### Agent Event API
 
-- [ ] Define event types: `token`, `tool_call`, `tool_result`, `done`, `error`
-- [ ] Agent.stream() returns AsyncIterable<AgentEvent>
-- [ ] Backward-compatible: existing `run()` unchanged
+- [x] Define event types: `token`, `tool_call`, `tool_result`, `done`, `error`
+- [x] Agent.stream() returns AsyncIterable<AgentEvent>
+- [x] Backward-compatible: existing `run()` unchanged (forces non-streaming path)
 
 ### Real Web Search
 
-- [ ] Integrate DuckDuckGo or Brave Search API
-- [ ] Configurable search backend via config.json
-- [ ] Rate limiting and error handling
+- [x] Integrate DuckDuckGo (HTML endpoint, no API key)
+- [x] Configurable search backend via config.json (`search.backend`, default `none`)
+- [x] Error handling (network/non-2xx return model-friendly errors; result cap)
 
 ### Shell Exec Tool
 
-- [ ] exec tool with timeout and workspace restriction
-- [ ] Dangerous command deny list
-- [ ] Approval hook (delegates confirmation to caller — CLI or Web UI)
-- [ ] Output truncation for large results
+- [x] exec tool with timeout and workspace restriction (cwd-pinned)
+- [x] Dangerous command deny list
+- [x] Approval hook (delegates confirmation to caller via `approveCommand`)
+- [x] Output truncation for large results — opt-in via `exec.enabled` (default off)
 
 ### Apply Patch Tool
 
-- [ ] Unified diff-style file editing
-- [ ] Hunk matching and fallback
-- [ ] Dry-run mode
+- [x] Unified diff-style file editing
+- [x] Hunk matching and fallback (hint → exact scan → whitespace-insensitive)
+- [x] Dry-run mode
 
 ### Config & Schema Validation
 
-- [ ] Adopt `zod` for config parsing (dependency is already installed but unused)
-- [ ] Validate `.mini-agent/config.json` on load with clear error messages
-- [ ] Surface missing/invalid `apiKey` early instead of failing at first request
-- [ ] Consider reusing zod for tool parameter schemas (currently hand-rolled in `src/tools/schema.ts`)
+- [x] Adopt `zod` for config parsing
+- [x] Validate `.mini-agent/config.json` on load with clear error messages
+- [x] Surface missing/invalid `apiKey` early (config or `MINI_AGENT_API_KEY`)
+- [ ] Reuse zod for tool parameter schemas — deliberately deferred: the
+      hand-rolled validator in `src/tools/schema.ts` already returns
+      model-friendly errors, and swapping it has a large blast radius
 
 ### Accurate Context Accounting
 
-- [ ] Replace the `length / 4` token heuristic with a real tokenizer
-- [ ] Expose token `usage` through `RunResult` (AgentRunner already accumulates it; AgentLoop drops it)
-- [ ] Summarize compacted tool results instead of fully omitting them
+- [x] Replace `length / 4` with a pluggable `TokenCounter` (improved heuristic;
+      a real vendor tokenizer is intentionally NOT bundled — DeepSeek's tokenizer
+      differs from GPT's, so it would give false precision. Provider `usage` is
+      the source of truth.)
+- [x] Expose token `usage` through `RunResult` (AgentLoop no longer drops it)
+- [x] Summarize compacted tool results instead of fully omitting them
 
 ## Phase 3 — Web UI
 

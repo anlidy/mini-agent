@@ -7,14 +7,17 @@ A TypeScript AI agent — personal coding assistant with CLI, tool-calling, and 
 ## Features
 
 - **Agent Loop** — multi-turn tool-calling iteration with configurable max iterations
+- **Streaming & Events** — `Agent.stream()` yields token/tool/done events over an SSE-backed provider
+- **Abort / Cancel** — cooperative `AbortSignal` threaded through the loop and provider HTTP requests
 - **Tool System** — extensible tool registry with JSON Schema validation
-- **Built-in Tools** — read/write files, list directories, find files, grep, web fetch
+- **Built-in Tools** — read/write files, list directories, find files, grep, web fetch, web search, apply patch, opt-in exec
 - **Provider Abstraction** — OpenAI-compatible API, works with DeepSeek, OpenAI, and others
 - **Session Persistence** — JSONL-based session storage with history trimming
-- **Context Management** — token estimation, context window budgeting, tool result compaction
+- **Context Management** — pluggable token counting, context window budgeting, tool result summarization, `usage` reporting
+- **Config Validation** — zod-validated `.mini-agent/config.json` with clear errors and early API-key checks
 - **Skills Framework** — workspace-level skills with YAML frontmatter and auto-injection
 - **Hook System** — lifecycle hooks for tool execution, iteration tracking, and custom middleware
-- **CLI REPL** — interactive terminal interface with session resume support
+- **CLI REPL** — interactive terminal interface with session resume and `--stream` support
 
 ## Requirements
 
@@ -95,7 +98,9 @@ Session keys are sanitized for filenames. Each line is one message record — to
 | `find_files` | Find files by glob-like pattern |
 | `grep` | Search text files with literal or regex patterns |
 | `web_fetch` | Fetch an HTTP/HTTPS URL and convert HTML to text |
-| `web_search` | Placeholder — returns a not-configured error until a search backend is added (see `docs/ROADMAP.md`) |
+| `web_search` | Search the web via the DuckDuckGo backend when `search.backend` is configured (default `none`) |
+| `apply_patch` | Apply a unified-diff patch with fuzzy hunk matching and a dry-run mode |
+| `exec` | Run a shell command in the workspace — **opt-in** via `exec.enabled`, deny-listed and approval-gated |
 
 File tools are workspace-scoped and skip common generated directories (`node_modules`, `.git`, `dist`, `coverage`).
 

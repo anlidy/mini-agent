@@ -42,14 +42,18 @@ AgentLoop is the sole wiring/coordination layer — it constructs and connects e
 
 ### AgentRunner (`src/agent/AgentRunner.ts`)
 
-The core execution engine. Takes a spec (`AgentRunSpec`) and runs the LLM + tool-calling iteration loop:
+The core execution engine. Takes a spec (`AgentRunSpec`) and runs the LLM + tool-calling iteration loop. A single internal `execute(spec, streaming)` generator backs two public entry points:
+
+- `run(spec)` — consumes the loop with streaming disabled (always `provider.chat`), so its behavior and the provider contract are unchanged. Returns `AgentRunResult`.
+- `runStream(spec)` — prefers `provider.chatStream` and yields `AgentEvent`s (`token`, `tool_call`, `tool_result`, `error`, and a single terminal `done` carrying the full result).
 
 ```
 for iteration up to maxIterations:
-    call provider.chat(messages, tools)
+    if signal aborted → done(aborted)
+    call provider.chat / chatStream (forward AbortSignal)
     if tool calls returned:
         push assistant message with tool_calls
-        execute each tool → push tool result messages
+        execute each tool → push tool result messages (emit tool_call/tool_result)
         continue loop
     else:
         push final assistant message → done
@@ -61,8 +65,13 @@ Built-in resilience:
 - **Truncated tool call recovery** — if the response is cut mid-tool-call, request reissue once
 - **Orphan tool result cleanup** — remove tool messages whose parent assistant message was dropped
 - **Missing tool result backfill** — insert synthetic results for tool calls that lost their output
-- **Tool result compaction** — replace old large tool results with one-line summaries
-- **Context budget trimming** — drop oldest messages when estimated token count exceeds limit
+- **Tool result compaction** — replace old large tool results with a one-line summary
+- **Context budget trimming** — drop oldest messages using a pluggable `TokenCounter` (`src/agent/tokens.ts`) when the estimated token count exceeds the limit
+- **Cooperative abort** — an `AbortSignal` on the spec exits the loop cleanly with `stopReason: "aborted"`
+
+### Events & streaming (`src/agent/events.ts`)
+
+`AgentEvent` is the discriminated union surfaced by `runStream` / `AgentLoop.stream`: `token`, `tool_call`, `tool_result`, `done`, `error`. Providers expose streaming through an optional `chatStream(): AsyncIterable<ProviderStreamEvent>`; the runner falls back to `chat()` when it is absent, so streaming is purely additive.
 
 ### Provider (`src/providers/`)
 
@@ -72,10 +81,11 @@ Abstracts the LLM backend behind a single interface:
 interface LLMProvider {
   defaultModel(): string;
   chat(request: ChatRequest): Promise<LLMResponse>;
+  chatStream?(request: ChatRequest): AsyncIterable<ProviderStreamEvent>;
 }
 ```
 
-Implemented by `OpenAIProvider` — works with any OpenAI-compatible API (DeepSeek, OpenAI, etc.).
+Implemented by `OpenAIProvider` — works with any OpenAI-compatible API (DeepSeek, OpenAI, etc.). It parses Server-Sent Events for `chatStream`, accumulating fragmented tool calls by index, and shares one request path with `chat` that composes the caller's `AbortSignal` with an internal timeout.
 
 Key design rule: Provider returns tool call requests, it never executes them.
 
@@ -85,7 +95,9 @@ Three layers:
 
 1. **Tool interface** — name, description, JSON Schema parameters, execute function
 2. **ToolRegistry** — register → getDefinitions → prepareCall → execute
-3. **Built-in tools** — read_file, write_file, list_dir, find_files, grep, web_fetch, web_search (web_search is a placeholder pending a search backend)
+3. **Built-in tools** — read_file, write_file, list_dir, find_files, grep, web_fetch, web_search, apply_patch, and (opt-in) exec
+
+`createDefaultToolRegistry(options)` assembles the set. `web_search` uses a DuckDuckGo backend when `search.backend` is configured (default `none`). `apply_patch` applies unified diffs with fuzzy hunk matching and a dry-run mode. `exec` runs shell commands and is **off by default**: it is only registered when `exec.enabled` is true, refuses a deny list of destructive commands, pins `cwd` to the workspace, enforces a timeout, and consults an optional `approveCommand` gate on the execution context.
 
 Schema validation happens at `prepareCall`: arguments are cast to their declared types, then validated against the JSON Schema. Validation errors are returned to the model as tool results — the runtime never crashes on bad arguments.
 
@@ -127,11 +139,14 @@ Discovers skills from `workspace/skills/{name}/SKILL.md`:
 
 ### Config (`src/config/`)
 
-Loads and merges configuration:
+Loads, merges, and validates configuration:
 
-- `defaultConfig()` — hardcoded defaults
-- `loadConfig()` — reads `.mini-agent/config.json` with deep merge
-- `ensureDefaultConfig()` — auto-creates config file on first run
+- `defaultConfig()` — hardcoded defaults (the source of concrete values like the provider name and base URL)
+- `loadConfig()` — reads `.mini-agent/config.json`, deep-merges over the defaults, then validates the result against a zod schema (`src/config/schema.ts`), reporting all issues with dotted paths and rejecting unknown keys
+- `ensureDefaultConfig()` — auto-creates the config file on first run
+- Optional `search` and `exec` blocks configure the web search backend and the opt-in exec tool
+
+A missing API key is surfaced early by `AgentLoop` (from config or `MINI_AGENT_API_KEY`) instead of failing at the first request. Token accounting uses a pluggable `TokenCounter` (`src/agent/tokens.ts`); real provider `usage` flows through `RunResult`.
 
 ### Hooks (`src/agent/hooks.ts`)
 
