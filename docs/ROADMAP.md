@@ -76,6 +76,17 @@ Core improvements needed before building the Web UI. Completed on branch
 - [x] Expose token `usage` through `RunResult` (AgentLoop no longer drops it)
 - [x] Summarize compacted tool results instead of fully omitting them
 
+### CLI / REPL
+
+Surfaces the runtime additions so each feature is verifiable from the terminal.
+
+- [x] `--stream` flag — print assistant tokens live via `AgentLoop.stream()`
+- [x] `usage>` line reporting token usage after each turn
+- [x] `Ctrl-C` aborts the in-flight turn (per-turn `AbortController`); idle exits
+- [x] Clean `Config error:` message on invalid config instead of a stack trace
+- [x] `/help`, `/tools`, `/tool <name> <json>` commands (`/tool` runs a tool with
+      no model call — deterministic verification of apply_patch/exec/web_search)
+
 ## Phase 3 — Web UI
 
 ### Backend

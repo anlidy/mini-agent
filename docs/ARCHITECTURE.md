@@ -28,6 +28,26 @@ SessionManager ──▶ .mini-agent/workspace/sessions/
 
 ## Modules
 
+### CLI / REPL (`src/cli.ts`)
+
+The application entry point and the only thing that talks to a human. `runCli`:
+
+1. **Parse args** — `--workspace`, `--session`, `--resume`, `--stream`.
+2. **Load config** — `ensureDefaultConfig`; a `ConfigValidationError` is caught and printed as a clean `Config error:` message (no stack trace) before exiting.
+3. **Wire one agent** — builds the `OpenAIProvider`, a config-driven `ToolRegistry` (search backend, opt-in exec), and a single `AgentLoop`.
+4. **Run the loop** — reads lines from a readline interface (TTY or piped). Plain input is sent to the agent via `run()` or, with `--stream`, `stream()` (printing tokens live); a terminal `usage>` line reports token usage.
+
+Commands are dispatched before reaching the agent:
+
+- `/help` — list commands
+- `/tools` — print the registered tools (reflects config)
+- `/tool <name> <json>` — execute one tool directly through the registry, with no model call (a deterministic verification/debug entry point)
+- `/exit`, `/quit` — leave
+
+`Ctrl-C` aborts the in-flight turn through a per-turn `AbortController` whose signal is threaded into `run`/`stream`; pressing it while idle exits.
+
+Boundary: the CLI is a thin driver. It never coordinates subsystems itself — that is AgentLoop's job — and depends only on `AgentLoop.run`/`stream` and the `ToolRegistry` interface. The `/tool` command deliberately bypasses the agent loop to exercise a tool in isolation; it is a verification aid, not a runtime path.
+
 ### AgentLoop (`src/agent/AgentLoop.ts`)
 
 The top-level coordinator. Creates and wires all dependencies, then executes the turn lifecycle:
@@ -161,17 +181,19 @@ Used for logging, monitoring, and approval flows.
 ## Data Flow
 
 ```text
-User Input
-    │
+CLI / REPL (parse args, load+validate config, dispatch /commands)
+    │  plain input → AgentLoop.run()  (or .stream() with --stream)
     ▼
 ContextBuilder.buildMessages()
     │  system prompt + history + user input
     ▼
-AgentRunner.run()
-    │  iterative LLM calls + tool execution
+AgentRunner.run() / runStream()
+    │  iterative LLM calls + tool execution (AbortSignal-aware)
     ▼
-Final Response + Session Save
+Final Response (+ usage) + Session Save
 ```
+
+For `--stream`, AgentRunner yields `AgentEvent`s (token/tool_call/tool_result/done) that the CLI prints live; the terminal `done` carries the same result `run()` would return.
 
 ## Design Principles
 
