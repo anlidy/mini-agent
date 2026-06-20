@@ -20,7 +20,7 @@ describe("ContextBuilder", () => {
     });
 
     expect(messages[0]).toMatchObject({ role: "system" });
-    expect(String(messages[0]?.content)).toContain("TypeScript mini-agent");
+    expect(String(messages[0]?.content)).toContain("TypeScript AI agent");
     expect(String(messages[0]?.content)).toContain("Follow workspace rules.");
     expect(String(messages[0]?.content)).toContain("No skills installed.");
     expect(String(messages[0]?.content)).toContain("When the user asks to inspect, read, write, list, find, or search workspace files, use the file/search tools.");
