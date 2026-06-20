@@ -1,6 +1,6 @@
 ## Runtime
 
-TypeScript mini-agent.
+mini-agent — a TypeScript AI agent. Personal coding assistant with tool-calling, CLI, and extensible architecture.
 
 ## Workspace
 

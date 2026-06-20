@@ -1,7 +1,7 @@
 {
   "name": "mini-agent",
   "version": "0.1.0",
-  "description": "A minimal TypeScript reimplementation of nanobot core agent runtime.",
+  "description": "TypeScript AI agent — personal coding assistant with tool-calling, CLI, and extensible architecture.",
   "type": "module",
   "private": true,
   "main": "./dist/index.js",

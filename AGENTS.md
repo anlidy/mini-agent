@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository is a TypeScript implementation of a minimal agent runtime. Work in this project should preserve the existing modular boundaries and keep the CLI usable.
+This repository is a TypeScript AI agent project — a personal coding assistant with CLI, tool-calling, and extensible architecture. Work in this project should preserve the existing modular boundaries and keep the CLI usable.
 
 ## Project Commands
 
@@ -26,13 +26,13 @@ node dist/cli.js --session default --resume
 
 ## Architecture Boundaries
 
-- `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence.
-- `src/agent/AgentRunner.ts` owns the provider/tool-call iteration loop.
-- `src/providers/*` must not execute tools.
+- `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence. It is the ONLY coordination layer.
+- `src/agent/AgentRunner.ts` owns the provider/tool-call iteration loop. Must not know about sessions or workspace product logic.
+- `src/providers/*` must not execute tools. Returns tool call requests only.
 - `src/tools/*` must not know about providers or sessions.
-- `src/session/*` persists and trims message history; it must not parse prompts or call providers.
-- `src/agent/ContextBuilder.ts` builds prompt/messages only; it must not call tools or providers.
-- `src/skills/SkillsLoader.ts` reads skill metadata and content only; it must not execute skills.
+- `src/session/*` persists and trims message history; must not parse prompts or call providers.
+- `src/agent/ContextBuilder.ts` builds prompt/messages only; must not call tools or providers.
+- `src/skills/SkillsLoader.ts` reads skill metadata and content only; must not execute skills.
 
 ## Runtime Data
 

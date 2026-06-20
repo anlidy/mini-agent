@@ -1,22 +1,20 @@
 # mini-agent
 
-Minimal TypeScript reimplementation of nanobot's core agent architecture.
+A TypeScript AI agent — personal coding assistant with CLI, tool-calling, and extensible architecture.
 
-`mini-agent` is a small, embeddable TypeScript agent runtime with:
+`mini-agent` is a self-contained agent runtime built from scratch in TypeScript. It combines an LLM-powered agent loop with a set of built-in tools (file operations, search, web fetch) to help you work with codebases directly from the terminal. Streaming and a Web UI are planned — see `docs/ROADMAP.md`.
 
-- `AgentLoop`
-- `AgentRunner`
-- provider abstraction
-- tool registry
-- session manager
-- context builder
-- skills loader framework
-- CLI REPL
-- JSONL session persistence
-- OpenAI-compatible provider support
-- built-in file/search/web tools
+## Features
 
-See `docs/nanobot-core-ts-scope.md` and `docs/nanobot-core-ts-checklist.md` for the implementation scope.
+- **Agent Loop** — multi-turn tool-calling iteration with configurable max iterations
+- **Tool System** — extensible tool registry with JSON Schema validation
+- **Built-in Tools** — read/write files, list directories, find files, grep, web fetch
+- **Provider Abstraction** — OpenAI-compatible API, works with DeepSeek, OpenAI, and others
+- **Session Persistence** — JSONL-based session storage with history trimming
+- **Context Management** — token estimation, context window budgeting, tool result compaction
+- **Skills Framework** — workspace-level skills with YAML frontmatter and auto-injection
+- **Hook System** — lifecycle hooks for tool execution, iteration tracking, and custom middleware
+- **CLI REPL** — interactive terminal interface with session resume support
 
 ## Requirements
 
@@ -56,20 +54,13 @@ The default config uses DeepSeek through the OpenAI-compatible provider:
 }
 ```
 
-You can edit `.mini-agent/config.json` to change `apiKey`, `baseUrl`, `model`, timeout, session directory, or agent limits.
+Edit `.mini-agent/config.json` to change `apiKey`, `baseUrl`, `model`, timeout, session directory, or agent limits.
 
 ## CLI Usage
 
-Run against the current workspace:
-
 ```bash
 npm run repl -- --session default --resume
-```
-
-Run against another workspace:
-
-```bash
-npm run repl -- --workspace /path/to/workspace --session my-session --resume
+npm run repl -- --workspace /path/to/project --session my-session --resume
 ```
 
 After building:
@@ -80,8 +71,7 @@ node dist/cli.js --session default --resume
 ```
 
 Inside the REPL:
-
-- Type a normal message and press Enter.
+- Type a message and press Enter.
 - Use `/exit` or `/quit` to leave.
 - Use `--resume` to print existing session history before continuing.
 
@@ -93,48 +83,25 @@ Sessions are stored as JSONL:
 .mini-agent/workspace/sessions/{key}.jsonl
 ```
 
-Session keys are sanitized for filenames. For example:
-
-```text
-project:default -> project_default.jsonl
-```
-
-Each line is one message record. Tool calls and tool results are saved, so resumed conversations can continue with useful history.
+Session keys are sanitized for filenames. Each line is one message record — tool calls and results are saved so resumed conversations continue with full context.
 
 ## Built-In Tools
 
-The default agent registers these tools:
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read a UTF-8 file inside the workspace |
+| `write_file` | Write a UTF-8 file, creating parent directories |
+| `list_dir` | List directory contents |
+| `find_files` | Find files by glob-like pattern |
+| `grep` | Search text files with literal or regex patterns |
+| `web_fetch` | Fetch an HTTP/HTTPS URL and convert HTML to text |
+| `web_search` | Placeholder — returns a not-configured error until a search backend is added (see `docs/ROADMAP.md`) |
 
-- `read_file`: read a UTF-8 file inside the workspace
-- `write_file`: write a UTF-8 file inside the workspace
-- `list_dir`: list workspace directory entries
-- `find_files`: find files by simple glob-like pattern
-- `grep`: search text files
-- `web_fetch`: fetch an HTTP/HTTPS URL and convert basic HTML to text
-- `web_search`: placeholder tool that reports when search is not configured
-
-File tools are restricted to the workspace and skip common generated directories such as `node_modules`, `.git`, `dist`, and `coverage`.
-
-Example prompts:
-
-```text
-Read README.md and summarize it.
-Find all TypeScript files related to sessions.
-Search the project for "AgentRunner".
-Write notes/todo.txt with a short implementation checklist.
-```
+File tools are workspace-scoped and skip common generated directories (`node_modules`, `.git`, `dist`, `coverage`).
 
 ## Skills
 
-Workspace skills can be added under:
-
-```text
-skills/{name}/SKILL.md
-```
-
-`SkillsLoader` reads YAML frontmatter and injects a skills summary into the system prompt.
-
-Example:
+Workspace skills can be added under `skills/{name}/SKILL.md`:
 
 ```markdown
 ---
@@ -145,6 +112,8 @@ always: true
 
 Use this skill when working in this repository.
 ```
+
+Skills are discovered at runtime and injected into the system prompt.
 
 ## Library Usage
 
@@ -160,7 +129,7 @@ const result = await agent.run("Read README.md and summarize it.");
 console.log(result.content);
 ```
 
-You can inject a custom provider or tool registry:
+Custom provider or tools:
 
 ```ts
 import { AgentLoop, OpenAIProvider, createDefaultToolRegistry } from "mini-agent";
@@ -179,17 +148,17 @@ const agent = new AgentLoop({
 ## Scripts
 
 ```bash
-npm run repl        # start CLI REPL from src/cli.ts
-npm run build       # compile to dist and copy prompt templates
+npm run repl        # start CLI REPL
+npm run build       # compile TypeScript to dist/ and copy prompt templates
 npm test            # run Vitest tests
 npm run typecheck   # run TypeScript type checking
 ```
 
-## Project Layout
+## Architecture
 
 ```text
 src/
-  agent/       AgentLoop, AgentRunner, ContextBuilder
+  agent/       AgentLoop, AgentRunner, ContextBuilder, hooks
   config/      config defaults and .mini-agent/config.json loading
   providers/   OpenAI-compatible provider abstraction
   session/     JSONL session persistence
@@ -198,6 +167,4 @@ src/
   prompts/     system prompt templates
 ```
 
-## Notes
-
-`.mini-agent/` is ignored by git because it contains local config and session data.
+See `docs/ARCHITECTURE.md` for detailed design and `docs/ROADMAP.md` for planned features.
