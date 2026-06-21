@@ -86,7 +86,7 @@ docs/ROADMAP.md    mark frontend plan/design status as in progress after impleme
 - Create: `web-ui/src/test/setup.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: Create frontend package metadata**
+- [x] **Step 1: Create frontend package metadata**
 
 Create `web-ui/package.json`:
 
@@ -129,7 +129,7 @@ Create `web-ui/package.json`:
 }
 ```
 
-- [ ] **Step 2: Install frontend dependencies**
+- [x] **Step 2: Install frontend dependencies**
 
 Run:
 
@@ -140,7 +140,11 @@ npm install
 
 Expected: `web-ui/package-lock.json` is created and install exits `0`.
 
-- [ ] **Step 3: Add Vite and TypeScript config**
+Result on 2026-06-21: `npm --prefix web-ui install` completed, created
+`web-ui/package-lock.json`, audited 195 packages, and reported 0
+vulnerabilities.
+
+- [x] **Step 3: Add Vite and TypeScript config**
 
 Create `web-ui/vite.config.ts`:
 
@@ -209,7 +213,7 @@ Create `web-ui/tsconfig.node.json`:
 }
 ```
 
-- [ ] **Step 4: Add Tailwind config and global CSS**
+- [x] **Step 4: Add Tailwind config and global CSS**
 
 Create `web-ui/tailwind.config.ts`:
 
@@ -286,7 +290,7 @@ textarea {
 }
 ```
 
-- [ ] **Step 5: Add initial React entry**
+- [x] **Step 5: Add initial React entry**
 
 Create `web-ui/index.html`:
 
@@ -335,7 +339,7 @@ Create `web-ui/src/test/setup.ts`:
 import "@testing-library/jest-dom/vitest";
 ```
 
-- [ ] **Step 6: Add root scripts**
+- [x] **Step 6: Add root scripts**
 
 Modify root `package.json` scripts:
 
@@ -349,7 +353,7 @@ Modify root `package.json` scripts:
 
 Keep existing root scripts unchanged.
 
-- [ ] **Step 7: Verify scaffold**
+- [x] **Step 7: Verify scaffold**
 
 Run:
 
@@ -360,12 +364,17 @@ npm --prefix web-ui run test
 
 Expected: build exits `0`; test exits `0` with no tests or a passing empty suite.
 
-- [ ] **Step 8: Commit**
+Result on 2026-06-21: scaffold was later covered by the full frontend test and
+build runs after dependencies were installed.
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add package.json web-ui
 git commit -m "feat(web-ui): scaffold React frontend"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 2: Add API Types And HTTP Client
 
@@ -374,7 +383,7 @@ git commit -m "feat(web-ui): scaffold React frontend"
 - Create: `web-ui/src/api/http.ts`
 - Test: `web-ui/src/api/http.test.ts`
 
-- [ ] **Step 1: Define browser-facing API types**
+- [x] **Step 1: Define browser-facing API types**
 
 Create `web-ui/src/api/types.ts`:
 
@@ -458,7 +467,7 @@ export interface ToolDefinition {
 }
 ```
 
-- [ ] **Step 2: Write HTTP client tests**
+- [x] **Step 2: Write HTTP client tests**
 
 Create `web-ui/src/api/http.test.ts`:
 
@@ -513,7 +522,7 @@ describe("http api helpers", () => {
 });
 ```
 
-- [ ] **Step 3: Implement HTTP helpers**
+- [x] **Step 3: Implement HTTP helpers**
 
 Create `web-ui/src/api/http.ts`:
 
@@ -554,7 +563,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 ```
 
-- [ ] **Step 4: Verify HTTP client**
+- [x] **Step 4: Verify HTTP client**
 
 Run:
 
@@ -564,12 +573,16 @@ npm --prefix web-ui run test -- src/api/http.test.ts
 
 Expected: all HTTP helper tests pass.
 
-- [ ] **Step 5: Commit**
+Result on 2026-06-21: covered by the full frontend test run, which passed.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add web-ui/src/api
 git commit -m "feat(web-ui): add REST API client"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 3: Add WebSocket Client And Event Model
 
@@ -577,7 +590,7 @@ git commit -m "feat(web-ui): add REST API client"
 - Create: `web-ui/src/api/ws.ts`
 - Test: `web-ui/src/api/ws.test.ts`
 
-- [ ] **Step 1: Define WebSocket event types and client**
+- [x] **Step 1: Define WebSocket event types and client**
 
 Create `web-ui/src/api/ws.ts`:
 
@@ -588,9 +601,13 @@ export type ClientMessage =
   | { type: "approve_command"; id: string; approved: boolean };
 
 export type AgentDoneResult = {
-  content: string;
-  stopReason?: string;
-  usage?: Record<string, unknown>;
+  finalContent: string | null;
+  messages: Array<Record<string, unknown>>;
+  toolsUsed: string[];
+  usage: Record<string, number>;
+  stopReason: "completed" | "max_iterations" | "error" | "aborted";
+  error?: string;
+  toolEvents: Array<{ name: string; status: "ok" | "error"; detail: string }>;
 };
 
 export type ServerMessage =
@@ -638,7 +655,7 @@ export function createAgentSocket(
 }
 ```
 
-- [ ] **Step 2: Add a focused URL construction test**
+- [x] **Step 2: Add a focused URL construction test**
 
 Create `web-ui/src/api/ws.test.ts`:
 
@@ -675,7 +692,7 @@ describe("createAgentSocket", () => {
 });
 ```
 
-- [ ] **Step 3: Verify WebSocket client**
+- [x] **Step 3: Verify WebSocket client**
 
 Run:
 
@@ -685,12 +702,18 @@ npm --prefix web-ui run test -- src/api/ws.test.ts
 
 Expected: WebSocket client test passes.
 
-- [ ] **Step 4: Commit**
+Result on 2026-06-21: covered by the full frontend test run, which passed. Spec
+review also corrected `AgentDoneResult` to match the backend `AgentRunResult`
+shape.
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add web-ui/src/api/ws.ts web-ui/src/api/ws.test.ts
 git commit -m "feat(web-ui): add websocket client"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 4: Build App Shell, Sidebar, And Files Sidebar
 
@@ -701,7 +724,7 @@ git commit -m "feat(web-ui): add websocket client"
 - Modify: `web-ui/src/App.tsx`
 - Test: `web-ui/src/components/AppShell.test.tsx`
 
-- [ ] **Step 1: Write layout test**
+- [x] **Step 1: Write layout test**
 
 Create `web-ui/src/components/AppShell.test.tsx`:
 
@@ -731,7 +754,7 @@ describe("AppShell", () => {
 });
 ```
 
-- [ ] **Step 2: Implement app shell**
+- [x] **Step 2: Implement app shell**
 
 Create `web-ui/src/components/AppShell.tsx`:
 
@@ -771,7 +794,7 @@ export default function AppShell({ sessionSidebar, filesSidebar, children, onOpe
 }
 ```
 
-- [ ] **Step 3: Implement placeholder sidebars**
+- [x] **Step 3: Implement placeholder sidebars**
 
 Create `web-ui/src/components/SessionSidebar.tsx`:
 
@@ -865,7 +888,7 @@ export default function FilesSidebar({ tree, selectedPath, onSelect, onRefresh }
 }
 ```
 
-- [ ] **Step 4: Wire shell into App**
+- [x] **Step 4: Wire shell into App**
 
 Modify `web-ui/src/App.tsx`:
 
@@ -901,7 +924,7 @@ export default function App(): JSX.Element {
 }
 ```
 
-- [ ] **Step 5: Verify shell**
+- [x] **Step 5: Verify shell**
 
 Run:
 
@@ -912,12 +935,17 @@ npm --prefix web-ui run build
 
 Expected: test and build pass.
 
-- [ ] **Step 6: Commit**
+Result on 2026-06-21: covered by the full frontend test and build runs, which
+passed. Spec review passed.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add web-ui/src/App.tsx web-ui/src/components
 git commit -m "feat(web-ui): add chat-first app shell"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 5: Implement Session And File Hooks
 
@@ -927,7 +955,7 @@ git commit -m "feat(web-ui): add chat-first app shell"
 - Test: `web-ui/src/hooks/useSessions.test.tsx`
 - Test: `web-ui/src/hooks/useFiles.test.tsx`
 
-- [ ] **Step 1: Implement session hook**
+- [x] **Step 1: Implement session hook**
 
 Create `web-ui/src/hooks/useSessions.ts`:
 
@@ -979,7 +1007,7 @@ export function useSessions(defaultKey = "default") {
 }
 ```
 
-- [ ] **Step 2: Implement file hook**
+- [x] **Step 2: Implement file hook**
 
 Create `web-ui/src/hooks/useFiles.ts`:
 
@@ -1020,7 +1048,7 @@ export function useFiles() {
 }
 ```
 
-- [ ] **Step 3: Add hook tests with mocked fetch**
+- [x] **Step 3: Add hook tests with mocked fetch**
 
 Create `web-ui/src/hooks/useFiles.test.tsx`:
 
@@ -1076,7 +1104,7 @@ describe("useSessions", () => {
 });
 ```
 
-- [ ] **Step 4: Verify hooks**
+- [x] **Step 4: Verify hooks**
 
 Run:
 
@@ -1086,12 +1114,16 @@ npm --prefix web-ui run test -- src/hooks
 
 Expected: hook tests pass.
 
-- [ ] **Step 5: Commit**
+Result on 2026-06-21: covered by the full frontend test run, which passed.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add web-ui/src/hooks
 git commit -m "feat(web-ui): load sessions and workspace files"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 6: Implement Chat Thread, Execution Chain, Approval Card, And Composer
 
@@ -1104,8 +1136,9 @@ git commit -m "feat(web-ui): load sessions and workspace files"
 - Test: `web-ui/src/components/ExecutionChain.test.tsx`
 - Test: `web-ui/src/components/ApprovalCard.test.tsx`
 - Test: `web-ui/src/components/Composer.test.tsx`
+- Test: `web-ui/src/components/ChatThread.test.tsx`
 
-- [ ] **Step 1: Define runtime UI state**
+- [x] **Step 1: Define runtime UI state**
 
 Create `web-ui/src/hooks/useAgentSocket.ts`:
 
@@ -1195,7 +1228,7 @@ export function useAgentSocket(sessionKey: string) {
 }
 ```
 
-- [ ] **Step 2: Implement ExecutionChain**
+- [x] **Step 2: Implement ExecutionChain**
 
 Create `web-ui/src/components/ExecutionChain.tsx`:
 
@@ -1236,7 +1269,7 @@ export default function ExecutionChain({ steps }: ExecutionChainProps): JSX.Elem
 }
 ```
 
-- [ ] **Step 3: Implement ApprovalCard**
+- [x] **Step 3: Implement ApprovalCard**
 
 Create `web-ui/src/components/ApprovalCard.tsx`:
 
@@ -1271,7 +1304,7 @@ export default function ApprovalCard({ approval, onResolve }: ApprovalCardProps)
 }
 ```
 
-- [ ] **Step 4: Implement Composer**
+- [x] **Step 4: Implement Composer**
 
 Create `web-ui/src/components/Composer.tsx`:
 
@@ -1324,7 +1357,7 @@ export default function Composer({ disabled, onSend }: ComposerProps): JSX.Eleme
 }
 ```
 
-- [ ] **Step 5: Implement ChatThread**
+- [x] **Step 5: Implement ChatThread**
 
 Create `web-ui/src/components/ChatThread.tsx`:
 
@@ -1377,7 +1410,7 @@ export default function ChatThread(props: ChatThreadProps): JSX.Element {
 }
 ```
 
-- [ ] **Step 6: Add component tests**
+- [x] **Step 6: Add component tests**
 
 Create `web-ui/src/components/ExecutionChain.test.tsx`:
 
@@ -1443,7 +1476,7 @@ describe("Composer", () => {
 });
 ```
 
-- [ ] **Step 7: Verify chat components**
+- [x] **Step 7: Verify chat components**
 
 Run:
 
@@ -1454,12 +1487,18 @@ npm --prefix web-ui run build
 
 Expected: component tests and build pass.
 
-- [ ] **Step 8: Commit**
+Result on 2026-06-21: covered by the full frontend test and build runs, which
+passed. Spec review required and received fixes for expired approvals on close,
+active-turn abort control, and preserving composer draft after send.
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add web-ui/src/components web-ui/src/hooks/useAgentSocket.ts
 git commit -m "feat(web-ui): render chat execution flow"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 7: Wire Real App State
 
@@ -1468,7 +1507,7 @@ git commit -m "feat(web-ui): render chat execution flow"
 - Modify: `web-ui/src/components/FilesSidebar.tsx`
 - Test: `web-ui/src/App.test.tsx`
 
-- [ ] **Step 1: Replace demo data with hooks**
+- [x] **Step 1: Replace demo data with hooks**
 
 Modify `web-ui/src/App.tsx`:
 
@@ -1533,7 +1572,7 @@ export default function App(): JSX.Element {
 }
 ```
 
-- [ ] **Step 2: Extend FilesSidebar with preview**
+- [x] **Step 2: Extend FilesSidebar with preview**
 
 Modify `web-ui/src/components/FilesSidebar.tsx` props and bottom content:
 
@@ -1560,7 +1599,7 @@ Render after the tree:
 ) : null}
 ```
 
-- [ ] **Step 3: Add app smoke test**
+- [x] **Step 3: Add app smoke test**
 
 Create `web-ui/src/App.test.tsx`:
 
@@ -1602,7 +1641,7 @@ describe("App", () => {
 });
 ```
 
-- [ ] **Step 4: Verify integrated app**
+- [x] **Step 4: Verify integrated app**
 
 Run:
 
@@ -1613,12 +1652,17 @@ npm --prefix web-ui run build
 
 Expected: integrated test and build pass.
 
-- [ ] **Step 5: Commit**
+Result on 2026-06-21: covered by the full frontend test and build runs, which
+passed. Spec review passed.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add web-ui/src/App.tsx web-ui/src/App.test.tsx web-ui/src/components/FilesSidebar.tsx
 git commit -m "feat(web-ui): wire frontend state"
 ```
+
+Result on 2026-06-21: included in final frontend implementation commit.
 
 ## Task 8: Implement Settings View
 
@@ -1627,7 +1671,7 @@ git commit -m "feat(web-ui): wire frontend state"
 - Create: `web-ui/src/hooks/useConfig.ts`
 - Test: `web-ui/src/components/SettingsView.test.tsx`
 
-- [ ] **Step 1: Add config hook**
+- [x] **Step 1: Add config hook**
 
 Create `web-ui/src/hooks/useConfig.ts`:
 
@@ -1673,7 +1717,7 @@ export function useConfig() {
 }
 ```
 
-- [ ] **Step 2: Add settings component**
+- [x] **Step 2: Add settings component**
 
 Create `web-ui/src/components/SettingsView.tsx`:
 
@@ -1721,7 +1765,7 @@ export default function SettingsView({ onClose }: SettingsViewProps): JSX.Elemen
 }
 ```
 
-- [ ] **Step 3: Add settings test**
+- [x] **Step 3: Add settings test**
 
 Create `web-ui/src/components/SettingsView.test.tsx`:
 
@@ -1754,7 +1798,7 @@ describe("SettingsView", () => {
 });
 ```
 
-- [ ] **Step 4: Verify settings**
+- [x] **Step 4: Verify settings**
 
 Run:
 
@@ -1765,12 +1809,23 @@ npm --prefix web-ui run build
 
 Expected: settings test and build pass.
 
-- [ ] **Step 5: Commit**
+Result on 2026-06-21: after `npm --prefix web-ui install`, full frontend tests
+and build passed:
+
+```bash
+npm --prefix web-ui run test
+npm --prefix web-ui run build
+```
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add web-ui/src/components/SettingsView.tsx web-ui/src/hooks/useConfig.ts web-ui/src/components/SettingsView.test.tsx
 git commit -m "feat(web-ui): add settings view"
 ```
+
+Result on 2026-06-21: commit handled in the final frontend implementation
+commit after full verification.
 
 ## Task 9: Polish, Manual Verification, And Docs
 
@@ -1779,7 +1834,7 @@ git commit -m "feat(web-ui): add settings view"
 - Modify: `docs/ROADMAP.md`
 - Modify: `docs/specs/2026-06-20-web-ui-frontend-design.md` if implementation decisions changed
 
-- [ ] **Step 1: Add README frontend commands**
+- [x] **Step 1: Add README frontend commands**
 
 Add under Web UI Backend or Scripts:
 
@@ -1802,7 +1857,7 @@ node dist/server.js --workspace . --host 127.0.0.1 --port 3210
 The server serves `web-ui/dist` when present.
 ```
 
-- [ ] **Step 2: Update roadmap frontend checklist**
+- [x] **Step 2: Update roadmap frontend checklist**
 
 In `docs/ROADMAP.md`, mark completed items after implementation lands:
 
@@ -1817,7 +1872,7 @@ In `docs/ROADMAP.md`, mark completed items after implementation lands:
 Only check items that are truly implemented. If Monaco or delete is deferred, leave
 that item unchecked and add a short note.
 
-- [ ] **Step 3: Run full frontend verification**
+- [x] **Step 3: Run full frontend verification**
 
 Run:
 
@@ -1828,7 +1883,10 @@ npm --prefix web-ui run build
 
 Expected: tests pass; `web-ui/dist` exists.
 
-- [ ] **Step 4: Run root verification**
+Result on 2026-06-21: frontend tests passed 11 files / 31 tests, and Vite
+production build emitted `web-ui/dist`.
+
+- [x] **Step 4: Run root verification**
 
 Run:
 
@@ -1840,7 +1898,10 @@ npm run build
 
 Expected: root tests, typecheck, and build pass.
 
-- [ ] **Step 5: Manual server verification**
+Result on 2026-06-21: root tests passed 21 files / 100 tests; typecheck and
+build exited 0.
+
+- [x] **Step 5: Manual server verification**
 
 Run:
 
@@ -1864,6 +1925,12 @@ Verify:
 - token events stream into the assistant message
 - tool events appear under `Execution chain`
 - exec approval appears inline when backend sends `approve_request`
+
+Result on 2026-06-21: started `node dist/server.js --workspace . --host
+127.0.0.1 --port 3210`, verified `/` returns the built React HTML, verified
+`/api/sessions` returns session JSON, and verified `/api/files/tree?path=.`
+returns a workspace file tree. Live model turn and exec approval were not run
+because they require an interactive provider-backed session.
 
 - [ ] **Step 6: Commit**
 

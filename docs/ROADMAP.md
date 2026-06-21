@@ -102,11 +102,12 @@ native `http` server and a small WebSocket adapter, not Express.
 
 ### Frontend
 
-- [ ] React + TypeScript + shadcn/ui + Tailwind
-- [ ] Chat interface with streaming text and tool call cards
-- [ ] Session sidebar (list, search, switch, delete)
+- [x] React + TypeScript + Tailwind scaffold
+- [x] Chat interface with streaming text and collapsible tool/thinking chain
+- [x] Session sidebar (list, switch, new session; search/delete deferred)
+- [x] Workspace file browser with recursive tree and text preview
+- [x] Settings view for provider, agent params, search, exec, and tools
 - [ ] Workspace file browser with syntax highlighting (Monaco Editor)
-- [ ] Config panel (provider, agent params)
 - [ ] Token usage and performance panel
 - [ ] Dark/light theme
 

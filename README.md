@@ -95,6 +95,24 @@ node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
 
 The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It also serves static frontend build output from `web-ui/dist` when that directory exists.
 
+Frontend development:
+
+```bash
+npm --prefix web-ui install
+npm run web:dev
+```
+
+Production frontend build:
+
+```bash
+npm run web:build
+npm run build
+node dist/server.js --workspace . --host 127.0.0.1 --port 3210
+```
+
+The dev server proxies `/api` and `/ws` to the local backend. The Node backend
+serves `web-ui/dist` when that directory exists.
+
 REST API:
 
 | Method | Path | Description |
@@ -231,6 +249,9 @@ npm run repl        # start CLI REPL
 npm run build       # compile TypeScript to dist/ and copy prompt templates
 npm test            # run Vitest tests
 npm run typecheck   # run TypeScript type checking
+npm run web:dev     # start Vite for the React frontend
+npm run web:build   # build the React frontend into web-ui/dist
+npm run web:test    # run frontend Vitest tests
 node dist/server.js # start the local HTTP/WebSocket backend after build
 ```
 
