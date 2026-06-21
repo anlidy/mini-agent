@@ -7,7 +7,7 @@ Scope source: `docs/ROADMAP.md` → Phase 3 (Backend half only; Frontend is a se
 ## Goals
 
 Add an HTTP/WebSocket server that exposes the existing agent runtime to a browser
-client, playing the same role the CLI plays today: a thin driver that does I/O and
+client, playing the same role the CLI currently plays: a thin driver that does I/O and
 protocol translation only, never reaching into runtime internals. `AgentLoop` stays
 the sole entry point. The CLI (`src/cli.ts`) is untouched; both drivers coexist.
 
@@ -171,6 +171,5 @@ of the whole config object from clobbering the real key with `***`.
 - Frontend (React/UI) — its own Phase 3 spec.
 - Auth, CORS, multi-user, network exposure — deployment is local single-user.
 - Live file writes via REST (file API is read-only; the agent still writes via tools).
-
 
 
