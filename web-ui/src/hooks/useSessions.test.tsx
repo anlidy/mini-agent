@@ -5,6 +5,7 @@ import type { Session, SessionSummary } from "../api/types";
 import { useSessions } from "./useSessions";
 
 afterEach(() => {
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -63,6 +64,43 @@ describe("useSessions", () => {
     await waitFor(() => expect(result.current.sessions[0]?.key).toBe("default"));
     await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/default", expect.objectContaining({ method: "GET" }));
+  });
+
+  it("loads the last active session from local storage on refresh", async () => {
+    localStorage.setItem("mini-agent.activeSessionKey", "other");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/sessions") {
+        return jsonResponse([sessionSummary("default"), sessionSummary("other")]);
+      }
+      return jsonResponse(session(path.endsWith("/other") ? "other" : "default"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useSessions("default"));
+
+    await waitFor(() => expect(result.current.activeSession?.key).toBe("other"));
+    expect(result.current.activeKey).toBe("other");
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions/other", expect.objectContaining({ method: "GET" }));
+  });
+
+  it("persists the selected session key", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/sessions") {
+        return jsonResponse([sessionSummary("default"), sessionSummary("other")]);
+      }
+      return jsonResponse(session(path.endsWith("/other") ? "other" : "default"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useSessions("default"));
+    await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
+
+    await act(async () => {
+      await result.current.loadSession("other");
+    });
+
+    expect(localStorage.getItem("mini-agent.activeSessionKey")).toBe("other");
   });
 
   it("keeps the newest selected session when older requests resolve later", async () => {

@@ -1,4 +1,5 @@
-import { RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, File, Folder, RefreshCw } from "lucide-react";
 
 import type { FileTreeNode } from "../api/types";
 
@@ -6,6 +7,7 @@ interface FilesSidebarProps {
   tree?: FileTreeNode;
   selectedPath?: string;
   selectedContent?: string;
+  workspacePath?: string;
   error?: string;
   onSelect(path: string): void;
   onRefresh(): void;
@@ -15,36 +17,42 @@ export default function FilesSidebar({
   tree,
   selectedPath,
   selectedContent,
+  workspacePath,
   error,
   onSelect,
   onRefresh
 }: FilesSidebarProps) {
   return (
-    <div>
-      <div className="flex h-12 items-center justify-between px-3 text-xs font-bold uppercase text-muted">
-        <span>Files</span>
-        <button
-          className="grid h-[30px] w-[30px] place-items-center rounded-[7px] border border-line bg-white text-text"
-          onClick={onRefresh}
-          type="button"
-          aria-label="Refresh files"
-        >
-          <RefreshCw size={14} />
-        </button>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="border-b border-line px-3 py-3">
+        <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase text-muted">
+          <span>Files</span>
+          <button
+            className="grid h-[30px] w-[30px] place-items-center rounded-[7px] border border-line bg-white text-text"
+            onClick={onRefresh}
+            type="button"
+            aria-label="Refresh files"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+        <div className="truncate font-mono text-[11px] normal-case text-muted" title={workspacePath ?? tree?.path ?? "."}>
+          {workspacePath ?? tree?.path ?? "."}
+        </div>
       </div>
       <div className="mx-3 mb-2.5 rounded-[7px] bg-white px-2.5 py-2 text-[13px] text-[#9aa2aa] shadow-[inset_0_0_0_1px_#e1e5e2]">
         Filter files
       </div>
-      <div className="px-2.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
         {tree?.children?.map((node) => (
           <FileTreeRow key={node.path} node={node} selectedPath={selectedPath} depth={0} onSelect={onSelect} />
         ))}
       </div>
       {error ? <div className="mx-2.5 mt-3 rounded-ui bg-red/10 p-2.5 text-xs text-red">{error}</div> : null}
       {selectedPath ? (
-        <div className="mx-2.5 mt-3 rounded-ui bg-white p-2.5 shadow-[inset_0_0_0_1px_#e1e5e2]">
+        <div className="mx-2.5 mb-3 rounded-ui bg-white p-2.5 shadow-[inset_0_0_0_1px_#e1e5e2]">
           <strong className="mb-2 block truncate font-mono text-[11px] text-ink">{selectedPath}</strong>
-          <pre className="max-h-64 overflow-hidden whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted">
+          <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted">
             {selectedContent?.slice(0, 1200) ?? "Loading..."}
           </pre>
         </div>
@@ -61,11 +69,15 @@ interface FileTreeRowProps {
 }
 
 function FileTreeRow({ node, selectedPath, depth, onSelect }: FileTreeRowProps) {
+  const [expanded, setExpanded] = useState(false);
   const isFile = node.type === "file";
   const isSelected = node.path === selectedPath;
+  const hasChildren = Boolean(node.children?.length);
   const content = (
     <>
-      <span>{isFile ? "f" : "d"}</span>
+      <span className="grid h-4 w-4 place-items-center">
+        {isFile ? <File size={13} /> : <Folder size={13} />}
+      </span>
       <span className="truncate">{node.path}</span>
     </>
   );
@@ -85,16 +97,30 @@ function FileTreeRow({ node, selectedPath, depth, onSelect }: FileTreeRowProps) 
           {content}
         </button>
       ) : (
-        <div
-          className="grid min-h-7 grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-[7px] px-2 font-mono text-xs text-muted"
+        <button
+          className="grid min-h-7 w-full grid-cols-[18px_18px_minmax(0,1fr)] items-center gap-1 rounded-[7px] px-2 text-left font-mono text-xs text-muted"
           style={{ paddingLeft: `${8 + depth * 12}px` }}
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
         >
+          <span className="grid h-4 w-4 place-items-center">
+            {hasChildren && expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </span>
           {content}
-        </div>
+        </button>
       )}
-      {node.children?.map((child) => (
-        <FileTreeRow key={child.path} node={child} selectedPath={selectedPath} depth={depth + 1} onSelect={onSelect} />
-      ))}
+      {expanded
+        ? node.children?.map((child) => (
+            <FileTreeRow
+              key={child.path}
+              node={child}
+              selectedPath={selectedPath}
+              depth={depth + 1}
+              onSelect={onSelect}
+            />
+          ))
+        : null}
     </div>
   );
 }

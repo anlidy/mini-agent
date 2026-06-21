@@ -31,6 +31,7 @@ function renderMessageContent(content: unknown) {
 
 export default function ChatThread(props: ChatThreadProps) {
   const [draft, setDraft] = useState("");
+  const [currentUserMessage, setCurrentUserMessage] = useState("");
   const wasActiveRef = useRef(false);
 
   useEffect(() => {
@@ -40,22 +41,22 @@ export default function ChatThread(props: ChatThreadProps) {
     wasActiveRef.current = props.active;
   }, [props.active, props.error]);
 
+  useEffect(() => {
+    setCurrentUserMessage("");
+  }, [props.sessionKey]);
+
+  const currentUserMessagePersisted = props.messages.some(
+    (message) => message.role === "user" && renderMessageContent(message.content) === currentUserMessage
+  );
+  const assistantDraftPersisted = props.messages.some(
+    (message) => message.role === "assistant" && renderMessageContent(message.content) === props.assistantDraft
+  );
+
   return (
-    <div className="mx-auto grid min-h-[746px] w-full max-w-[700px] grid-rows-[48px_minmax(0,1fr)_auto] px-5">
+    <div className="mx-auto grid h-full min-h-0 w-full max-w-[700px] grid-rows-[48px_minmax(0,1fr)_auto] px-5">
       <div className="flex items-center justify-between border-b border-line">
         <strong className="text-sm text-ink">{props.sessionKey}</strong>
-        {props.active ? (
-          <button
-            className="rounded-[7px] border border-line bg-white px-2.5 py-1 font-mono text-[11px] text-muted"
-            disabled={props.aborting}
-            onClick={props.onAbort}
-            type="button"
-          >
-            {props.aborting ? "Aborting" : "Abort"}
-          </button>
-        ) : (
-          <span className="font-mono text-[11px] text-muted">mini-agent</span>
-        )}
+        <span className="font-mono text-[11px] text-muted">mini-agent</span>
       </div>
       <div className="overflow-y-auto py-7">
         {props.messages.map((message, index) => {
@@ -76,7 +77,15 @@ export default function ChatThread(props: ChatThreadProps) {
             </article>
           );
         })}
-        {props.assistantDraft ? (
+        {currentUserMessage && !currentUserMessagePersisted ? (
+          <article className="mb-5 ml-auto max-w-[620px]">
+            <div className="mb-1.5 font-mono text-[11px] uppercase text-[#9aa2aa]">You</div>
+            <div className="whitespace-pre-wrap rounded-ui bg-accent-soft p-4 text-sm leading-relaxed">
+              {currentUserMessage}
+            </div>
+          </article>
+        ) : null}
+        {props.assistantDraft && !assistantDraftPersisted ? (
           <article className="mb-5">
             <div className="mb-1.5 font-mono text-[11px] uppercase text-[#9aa2aa]">mini-agent</div>
             <div className="whitespace-pre-wrap rounded-ui bg-white p-4 text-sm leading-relaxed shadow-[inset_0_0_0_1px_#e1e5e2]">
@@ -92,9 +101,13 @@ export default function ChatThread(props: ChatThreadProps) {
         disabled={props.active || !props.connected}
         value={draft}
         onChange={setDraft}
+        active={props.active}
+        aborting={props.aborting}
+        onAbort={props.onAbort}
         onSend={(text) => {
           const accepted = props.onSend(text);
           if (accepted) {
+            setCurrentUserMessage(text);
             wasActiveRef.current = true;
           }
         }}

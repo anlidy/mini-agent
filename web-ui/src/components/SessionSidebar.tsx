@@ -20,7 +20,7 @@ export default function SessionSidebar({
   settingsDisabled = false
 }: SessionSidebarProps) {
   return (
-    <div className="relative min-h-[746px]">
+    <div className="relative flex min-h-full flex-col">
       <div className="flex h-12 items-center justify-between px-3 text-xs font-bold uppercase text-muted">
         <span>Sessions</span>
         <button
@@ -35,7 +35,7 @@ export default function SessionSidebar({
       <div className="mx-3 mb-2.5 rounded-[7px] bg-white px-2.5 py-2 text-[13px] text-[#9aa2aa] shadow-[inset_0_0_0_1px_#e1e5e2]">
         Search sessions
       </div>
-      <div className="px-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-14">
         {sessions.map((session) => (
           <button
             key={session.key}

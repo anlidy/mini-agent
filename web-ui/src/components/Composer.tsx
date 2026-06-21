@@ -1,13 +1,24 @@
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 
 interface ComposerProps {
   disabled: boolean;
   value: string;
+  active?: boolean;
+  aborting?: boolean;
   onChange(value: string): void;
   onSend(text: string): void;
+  onAbort?(): void;
 }
 
-export default function Composer({ disabled, value, onChange, onSend }: ComposerProps) {
+export default function Composer({
+  disabled,
+  value,
+  active = false,
+  aborting = false,
+  onChange,
+  onSend,
+  onAbort
+}: ComposerProps) {
   function submit() {
     const trimmed = value.trim();
     if (!trimmed || disabled) {
@@ -34,13 +45,15 @@ export default function Composer({ disabled, value, onChange, onSend }: Composer
           value={value}
         />
         <button
-          aria-label="Send"
-          className="grid h-[38px] w-[38px] place-items-center rounded-ui bg-ink text-white disabled:opacity-40"
-          disabled={disabled || !value.trim()}
-          onClick={submit}
+          aria-label={active ? "Abort turn" : "Send"}
+          className={`grid h-[38px] w-[38px] place-items-center rounded-ui text-white disabled:opacity-40 ${
+            active ? "bg-red" : "bg-ink"
+          }`}
+          disabled={active ? aborting : disabled || !value.trim()}
+          onClick={active ? onAbort : submit}
           type="button"
         >
-          <Send size={16} />
+          {active ? <Square size={14} fill="currentColor" /> : <Send size={16} />}
         </button>
       </div>
       <div className="mt-2 flex justify-between font-mono text-[11px] text-[#9aa2aa]">

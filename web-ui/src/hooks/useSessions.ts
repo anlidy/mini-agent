@@ -3,16 +3,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiDelete, apiGet } from "../api/http";
 import type { Session, SessionSummary } from "../api/types";
 
+const ACTIVE_SESSION_STORAGE_KEY = "mini-agent.activeSessionKey";
+
 function formatError(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+function readStoredActiveKey(defaultKey: string): string {
+  try {
+    return localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY) || defaultKey;
+  } catch {
+    return defaultKey;
+  }
+}
+
+function writeStoredActiveKey(key: string): void {
+  try {
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, key);
+  } catch {
+    // Ignore storage failures; session loading should still work.
+  }
+}
+
 export function useSessions(defaultKey = "default") {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [activeKey, setActiveKey] = useState(defaultKey);
+  const [activeKey, setActiveKey] = useState(() => readStoredActiveKey(defaultKey));
   const [activeSession, setActiveSession] = useState<Session | undefined>();
   const [error, setError] = useState<string | undefined>();
   const mountedRef = useRef(true);
+  const initialActiveKeyRef = useRef(activeKey);
   const refreshRequestRef = useRef(0);
   const sessionRequestRef = useRef(0);
 
@@ -40,6 +59,7 @@ export function useSessions(defaultKey = "default") {
       const nextSession = await apiGet<Session>(`/api/sessions/${encodeURIComponent(key)}`);
       if (mountedRef.current && requestId === sessionRequestRef.current) {
         setActiveSession(nextSession);
+        writeStoredActiveKey(key);
         setError(undefined);
       }
       return true;
@@ -82,8 +102,8 @@ export function useSessions(defaultKey = "default") {
 
   useEffect(() => {
     void refresh();
-    void loadSession(defaultKey);
-  }, [defaultKey, loadSession, refresh]);
+    void loadSession(initialActiveKeyRef.current);
+  }, [loadSession, refresh]);
 
   return { sessions, activeKey, activeSession, error, refresh, loadSession, deleteSession };
 }

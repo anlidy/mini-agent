@@ -5,6 +5,7 @@ import type { Duplex } from "node:stream";
 import { AgentLoop } from "../agent/AgentLoop.js";
 import type { Config } from "../config/Config.js";
 import type { LLMProvider } from "../providers/Provider.js";
+import type { SessionManager } from "../session/SessionManager.js";
 import { createDefaultToolRegistry } from "../tools/index.js";
 import { parseClientMessage, type ServerMessage } from "./protocol.js";
 import type { ConfigState } from "./routes/config.js";
@@ -12,6 +13,7 @@ import type { ConfigState } from "./routes/config.js";
 export interface WebSocketHandlerOptions {
   workspace: string;
   state: ConfigState;
+  sessions?: SessionManager;
   providerFactory?: (config: Config) => LLMProvider;
   approvalTimeoutMs?: number;
 }
@@ -222,6 +224,7 @@ function buildAgent(
     workspace: options.workspace,
     sessionKey,
     sessionsDir: config.sessions.dir,
+    sessions: options.sessions,
     model: config.provider.model,
     tools: createDefaultToolRegistry({ search: config.search, exec: config.exec }),
     provider: options.providerFactory?.(config),

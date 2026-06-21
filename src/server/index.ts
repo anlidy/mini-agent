@@ -41,6 +41,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
     const handled = handleWebSocketUpgrade(req, socket, head, {
       workspace,
       state: handler.state,
+      sessions: handler.sessions,
       providerFactory: options.providerFactory,
       approvalTimeoutMs: options.approvalTimeoutMs
     });
@@ -83,6 +84,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
 
 export interface MiniAgentRequestHandler {
   state: ConfigState;
+  sessions: SessionManager;
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 }
 
@@ -100,6 +102,7 @@ export async function createRequestHandler(options: CreateServerOptions = {}): P
 
   return {
     state,
+    sessions,
     async handle(req, res) {
       if (await router.handle(req, res)) {
         return;

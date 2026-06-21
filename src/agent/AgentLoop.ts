@@ -43,6 +43,7 @@ export class AgentLoop implements Agent {
     this.tools = options.tools ?? createDefaultToolRegistry();
     this.approveCommand = options.approveCommand;
     this.sessionsDir = options.sessionsDir;
+    this.sessions = options.sessions;
     this.defaultSessionKey = options.sessionKey;
   }
 

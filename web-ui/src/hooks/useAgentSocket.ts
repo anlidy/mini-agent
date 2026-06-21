@@ -16,7 +16,12 @@ export interface ApprovalRequest {
   resolved?: "approved" | "denied" | "expired";
 }
 
-export function useAgentSocket(sessionKey: string) {
+interface UseAgentSocketOptions {
+  onDone?(): void;
+}
+
+export function useAgentSocket(sessionKey: string, options: UseAgentSocketOptions = {}) {
+  const { onDone } = options;
   const socketRef = useRef<AgentSocket | undefined>(undefined);
   const approvalRef = useRef<ApprovalRequest | undefined>(undefined);
   const turnActiveRef = useRef(false);
@@ -89,6 +94,7 @@ export function useAgentSocket(sessionKey: string) {
         if (typeof message.result.finalContent === "string") {
           setAssistantDraft(message.result.finalContent);
         }
+        onDone?.();
         if (approvalRef.current && !approvalRef.current.resolved) {
           const expiredApproval = { ...approvalRef.current, resolved: "expired" as const };
           setApproval(expiredApproval);
@@ -109,7 +115,7 @@ export function useAgentSocket(sessionKey: string) {
         setError(message.reason);
       }
     },
-    [setApproval, updateStep]
+    [onDone, setApproval, updateStep]
   );
 
   const send = useCallback((text: string): boolean => {
@@ -124,14 +130,7 @@ export function useAgentSocket(sessionKey: string) {
     }
 
     setAssistantDraft("");
-    setSteps([
-      {
-        id: `thinking-${Date.now()}`,
-        kind: "thinking",
-        title: "Prepare response",
-        status: "done"
-      }
-    ]);
+    setSteps([]);
     setApproval(undefined);
     setError(undefined);
     turnActiveRef.current = true;

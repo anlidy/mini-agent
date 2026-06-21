@@ -35,4 +35,22 @@ describe("Composer", () => {
 
     expect(onSend).not.toHaveBeenCalled();
   });
+
+  it("uses the send button position for abort while active", async () => {
+    const onAbort = vi.fn();
+    render(
+      <Composer
+        disabled={true}
+        value="hello"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        {...{ active: true, aborting: false, onAbort }}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Abort turn" }));
+
+    expect(onAbort).toHaveBeenCalledOnce();
+  });
 });

@@ -5,7 +5,9 @@ interface ExecutionChainProps {
 }
 
 export default function ExecutionChain({ steps }: ExecutionChainProps) {
-  if (steps.length === 0) {
+  const visibleSteps = steps.filter((step) => step.kind === "tool" || Boolean(step.detail));
+
+  if (visibleSteps.length === 0) {
     return null;
   }
 
@@ -14,10 +16,10 @@ export default function ExecutionChain({ steps }: ExecutionChainProps) {
       <summary className="flex min-h-[42px] cursor-pointer list-none items-center gap-2 px-3 text-sm text-muted">
         <span className="font-mono text-[11px] font-bold text-accent">&gt;</span>
         <span className="font-bold text-text">Execution chain</span>
-        <span className="ml-auto font-mono text-[11px] text-[#9aa2aa]">{steps.length} steps</span>
+        <span className="ml-auto font-mono text-[11px] text-[#9aa2aa]">{visibleSteps.length} steps</span>
       </summary>
       <div className="px-3 pb-2">
-        {steps.map((step) => (
+        {visibleSteps.map((step) => (
           <details key={step.id} className="border-t border-line" open={step.status === "approval"}>
             <summary className="flex min-h-[38px] cursor-pointer list-none items-center gap-2">
               <span className="font-mono text-[11px] font-bold text-accent">&gt;</span>
