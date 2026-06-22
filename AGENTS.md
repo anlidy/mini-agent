@@ -25,6 +25,14 @@ node dist/cli.js --session default --resume
 node dist/server.js --workspace . --host 127.0.0.1 --port 3210
 ```
 
+Web UI development (run from source, auto-restart on change — no build step needed):
+
+```bash
+npm run server:dev          # backend only (tsx watch on src/server.ts, :3210)
+npm run web:dev             # frontend only (vite, :5173, proxies /api and /ws)
+npm run web:full            # both concurrently (Ctrl-C stops both cleanly)
+```
+
 ## Architecture Boundaries
 
 - `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence. It is the ONLY coordination layer.
@@ -35,6 +43,7 @@ node dist/server.js --workspace . --host 127.0.0.1 --port 3210
 - `src/agent/ContextBuilder.ts` builds prompt/messages only; must not call tools or providers.
 - `src/skills/SkillsLoader.ts` reads skill metadata and content only; must not execute skills.
 - `src/server/*` is a thin HTTP/WebSocket driver. It may call `AgentLoop`, `SessionManager`, config helpers, and `ToolRegistry` factories, but must not execute tools directly or parse prompts.
+  - **SessionManager MUST be shared**: the HTTP layer and WebSocket handler must use a single `SessionManager` instance. Creating separate instances causes cache divergence — the HTTP reader will never see messages written by the WS side. The shared instance is created in `createRequestHandler`, exposed on the handler, and passed through `handleWebSocketUpgrade` → `bindAgentConnection` → `buildAgent` → `AgentLoop`.
 
 ## Runtime Data
 
@@ -102,3 +111,13 @@ The `exec` tool (shell commands) is NOT registered by default. It is opt-in via
 `exec.enabled` in config, pins `cwd` to the workspace, refuses a deny list of
 destructive commands, and honors the `approveCommand` gate on the execution
 context. Keep it off unless a workflow explicitly needs it.
+
+## Deep-dive references
+
+This file is the rulebook (boundaries, red lines, command quick-ref). For detailed
+mechanisms, data flow, and design rationale, see:
+
+| Document | Covers |
+|---|---|
+| `docs/ARCHITECTURE.md` | Full architecture: module map, data flow, design principles, subsystem responsibilities |
+| `docs/ROADMAP.md` | Phase progress, completed features, pending work |

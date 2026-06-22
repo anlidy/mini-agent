@@ -1,7 +1,7 @@
 # Phase 3 (Backend) — Web UI HTTP/WS Server Design
 
-Status: design — gated on user approval before implementation.
-Branch: `worktree-phase2-opus-4.8` (model: Claude Opus 4.8).
+Status: implemented and merged to `main`.
+Branch: originally designed on `worktree-phase2-opus-4.8`; now on `main`.
 Scope source: `docs/ROADMAP.md` → Phase 3 (Backend half only; Frontend is a separate spec).
 
 ## Goals
