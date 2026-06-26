@@ -58,6 +58,11 @@ Entry points:
 - `startServer(options)` — creates and listens in one call.
 - `src/server.ts` — executable wrapper (`node dist/server.js --workspace <dir> --host 127.0.0.1 --port 3210`).
 
+Static frontend files are served from `dist/webui` by default. That location is
+part of the mini-agent build output and is deliberately independent of
+`--workspace`, which remains the user project root for config, sessions, file APIs,
+and tools.
+
 REST routes:
 
 | Method | Path | Handler |

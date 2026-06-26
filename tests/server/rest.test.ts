@@ -1,13 +1,16 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Readable, Writable } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
 import { defaultConfig, REDACTED_API_KEY } from "../../src/config/loadConfig.js";
 import { createRequestHandler, type MiniAgentRequestHandler } from "../../src/server/index.js";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
   const config = defaultConfig(workspace);
@@ -23,7 +26,7 @@ async function call(
   method: string,
   url: string,
   body?: unknown
-): Promise<{ status: number; body: string; json: unknown }> {
+): Promise<{ status: number; body: string; headers: Record<string, string>; json: unknown }> {
   const reqBody = body === undefined ? "" : JSON.stringify(body);
   const req = Readable.from(reqBody ? [reqBody] : []) as IncomingMessage;
   Object.assign(req, {
@@ -33,6 +36,7 @@ async function call(
   });
 
   let responseBody = "";
+  const headers: Record<string, string> = {};
   const res = new Writable({
     write(chunk, _encoding, callback) {
       responseBody += chunk.toString();
@@ -40,13 +44,28 @@ async function call(
     }
   }) as ServerResponse & { statusCode: number };
   res.statusCode = 200;
-  res.setHeader = () => res;
-  res.getHeader = () => undefined;
-  res.removeHeader = () => undefined;
-  res.writeHead = (statusCode: number) => {
-    res.statusCode = statusCode;
+  res.setHeader = (name: string, value: number | string | readonly string[]) => {
+    headers[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : String(value);
     return res;
   };
+  res.getHeader = (name: string) => headers[name.toLowerCase()];
+  res.removeHeader = () => undefined;
+  res.writeHead = ((
+    statusCode: number,
+    statusMessageOrHeaders?: string | OutgoingHttpHeaders,
+    maybeHeaders?: OutgoingHttpHeaders
+  ) => {
+    res.statusCode = statusCode;
+    const outgoingHeaders = typeof statusMessageOrHeaders === "string" ? maybeHeaders : statusMessageOrHeaders;
+    if (outgoingHeaders) {
+      for (const [name, value] of Object.entries(outgoingHeaders)) {
+        if (value !== undefined) {
+          headers[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : String(value);
+        }
+      }
+    }
+    return res;
+  }) as ServerResponse["writeHead"];
   res.end = (chunk?: unknown) => {
     if (chunk) {
       responseBody += String(chunk);
@@ -58,6 +77,7 @@ async function call(
   return {
     status: res.statusCode,
     body: responseBody,
+    headers,
     json: responseBody ? JSON.parse(responseBody) as unknown : undefined
   };
 }
@@ -120,5 +140,28 @@ describe("server REST API", () => {
     const escaped = await call(handler, "GET", "/api/files/content?path=../outside");
     expect(escaped.status).toBe(403);
     expect(escaped.json).toEqual({ error: "Path escapes workspace: ../outside" });
+  });
+
+  it("serves the default frontend build outside the selected workspace", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-static-workspace-"));
+    const staticRoot = path.join(repoRoot, "dist", "webui");
+    const indexPath = path.join(staticRoot, "index.html");
+    const previousIndex = await readFile(indexPath, "utf8").catch(() => undefined);
+    await mkdir(staticRoot, { recursive: true });
+    await writeFile(indexPath, "<main>webui shell</main>", "utf8");
+
+    try {
+      const handler = await setup(workspace);
+      const response = await call(handler, "GET", "/");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-length"]).toBe(String(Buffer.byteLength("<main>webui shell</main>")));
+    } finally {
+      if (previousIndex === undefined) {
+        await rm(indexPath, { force: true });
+      } else {
+        await writeFile(indexPath, previousIndex, "utf8");
+      }
+    }
   });
 });

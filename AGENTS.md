@@ -33,6 +33,9 @@ npm run web:dev             # frontend only (vite, :5173, proxies /api and /ws)
 npm run web:full            # both concurrently (Ctrl-C stops both cleanly)
 ```
 
+Production Web UI builds emit to `dist/webui`; do not derive that static path from
+`--workspace`, which is the user project root.
+
 ## Architecture Boundaries
 
 - `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence. It is the ONLY coordination layer.

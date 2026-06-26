@@ -93,12 +93,12 @@ npm run build
 node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
 ```
 
-The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It also serves static frontend build output from `web-ui/dist` when that directory exists.
+The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It serves production frontend build output from `dist/webui`; this path is independent of `--workspace`.
 
 Frontend development (all run from source, no build step for the backend):
 
 ```bash
-npm --prefix web-ui install
+npm --prefix webui install
 npm run web:full            # both servers (tsx watch + vite), Ctrl-C stops both
 npm run server:dev          # backend only, auto-restarts on source change
 npm run web:dev             # frontend only (vite, proxies /api and /ws to :3210)
@@ -113,7 +113,7 @@ node dist/server.js --workspace . --host 127.0.0.1 --port 3210
 ```
 
 The dev server proxies `/api` and `/ws` to the local backend. The Node backend
-serves `web-ui/dist` when that directory exists.
+serves `dist/webui` after `npm run web:build`.
 
 REST API:
 
@@ -254,7 +254,7 @@ npm run typecheck    # run TypeScript type checking
 npm run server:dev   # start backend dev server (tsx watch, :3210, auto-restart)
 npm run web:dev      # start Vite for the React frontend (:5173)
 npm run web:full     # start both backend + frontend concurrently
-npm run web:build    # build the React frontend into web-ui/dist
+npm run web:build    # build the React frontend into dist/webui
 npm run web:test     # run frontend Vitest tests
 node dist/server.js  # start the local HTTP/WebSocket backend after build
 ```

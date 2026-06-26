@@ -108,7 +108,7 @@ native `http` server and a small WebSocket adapter, not Express.
 - [x] Workspace file browser with recursive tree and text preview
 - [x] Settings view for provider, agent params, search, exec, and tools
 - [x] Session history cache-consistency fix (2026-06-21: shared SessionManager
-  between HTTP and WS — `docs/specs/2026-06-21-web-ui-session-history-bug.md`)
+  between HTTP and WS — covered by `tests/server/session-sync.test.ts`)
 - [ ] Claude-style UI redesign (user requested; design doc upcoming)
 - [ ] Workspace file browser with syntax highlighting (Monaco Editor)
 - [ ] Token usage and performance panel

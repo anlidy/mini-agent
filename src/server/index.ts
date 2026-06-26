@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Config } from "../config/Config.js";
 import { ensureDefaultConfig } from "../config/loadConfig.js";
@@ -90,7 +91,7 @@ export interface MiniAgentRequestHandler {
 
 export async function createRequestHandler(options: CreateServerOptions = {}): Promise<MiniAgentRequestHandler> {
   const workspace = options.workspace ?? process.cwd();
-  const staticDir = options.staticDir ?? path.join(workspace, "web-ui", "dist");
+  const staticDir = options.staticDir ?? defaultStaticDir();
   const state = createConfigState(await ensureDefaultConfig(workspace));
   const sessions = new SessionManager({ workspace, sessionsDir: state.config.sessions.dir });
   const router = new HttpRouter();
@@ -116,6 +117,13 @@ export async function startServer(options: CreateServerOptions = {}): Promise<Mi
   const app = await createServer(options);
   await app.listen();
   return app;
+}
+
+function defaultStaticDir(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  return path.basename(path.dirname(moduleDir)) === "src"
+    ? path.resolve(moduleDir, "..", "..", "dist", "webui")
+    : path.resolve(moduleDir, "..", "webui");
 }
 
 function createConfigState(initial: Config): ConfigState {

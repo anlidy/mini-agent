@@ -1,7 +1,7 @@
 # Phase 3 (Frontend) — Web UI Design
 
 Status: design draft — based on approved visual direction v4.
-Mockup: `docs/mockups/2026-06-20-web-ui-frontend-design-draft-v4.html`.
+Mockup: `docs/mockups/2026-06-20-webui-frontend-design-draft-v4.html`.
 Scope source: `docs/ROADMAP.md` → Phase 3 Frontend.
 
 ## Product Direction

@@ -29,7 +29,7 @@ npx tsx watch src/server.ts --workspace "$WORKSPACE" --host "$HOST" --port "$POR
 backend_pid=$!
 
 echo "[dev-web] starting frontend (vite) on http://127.0.0.1:5173"
-npm --prefix web-ui run dev &
+npm --prefix webui run dev &
 frontend_pid=$!
 
 # If either process exits, tear the whole stack down.
