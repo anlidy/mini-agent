@@ -50,7 +50,7 @@ Boundary: the CLI is a thin driver. It never coordinates subsystems itself — t
 
 ### Web UI Backend (`src/server/`, `src/server.ts`)
 
-The Web UI backend is a second thin driver beside the CLI. It starts a native Node `http.Server`, handles WebSocket upgrades, and translates browser protocol messages into `AgentLoop.stream()` calls. It does not parse prompts, execute tools directly, or reach into runtime internals.
+The Web UI backend is a second thin driver beside the CLI. It starts a native Node `http.Server`, handles WebSocket upgrades via the `ws` library, and translates browser protocol messages into `AgentLoop.stream()` calls. It does not parse prompts, execute tools directly, or reach into runtime internals.
 
 Entry points:
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import type { Readable, Writable } from "node:stream";
@@ -38,7 +39,7 @@ interface ReplContext {
 export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const input = options.input ?? stdin;
   const output = options.output ?? stdout;
-  const args = parseArgs(options.argv ?? process.argv.slice(2));
+  const args = parseCliArgs(options.argv ?? process.argv.slice(2));
 
   let config;
   try {
@@ -260,28 +261,24 @@ function formatUsage(usage: Record<string, number>): string {
   return entries.map(([key, value]) => `${key}=${value}`).join(" ");
 }
 
-function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = {
-    workspace: process.cwd(),
-    session: "default",
-    resume: false,
-    stream: false
+function parseCliArgs(argv: string[]): CliArgs {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      workspace: { type: "string", default: process.cwd() },
+      session: { type: "string", default: "default" },
+      resume: { type: "boolean", default: false },
+      stream: { type: "boolean", default: false }
+    },
+    strict: true,
+    allowPositionals: false
+  });
+  return {
+    workspace: values.workspace ?? process.cwd(),
+    session: values.session ?? "default",
+    resume: values.resume ?? false,
+    stream: values.stream ?? false
   };
-  for (let index = 0; index < argv.length; index += 1) {
-    const item = argv[index];
-    if (item === "--workspace" && argv[index + 1]) {
-      args.workspace = argv[index + 1] ?? args.workspace;
-      index += 1;
-    } else if (item === "--session" && argv[index + 1]) {
-      args.session = argv[index + 1] ?? args.session;
-      index += 1;
-    } else if (item === "--resume") {
-      args.resume = true;
-    } else if (item === "--stream") {
-      args.stream = true;
-    }
-  }
-  return args;
 }
 
 runCli().catch((error) => {

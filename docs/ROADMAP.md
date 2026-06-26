@@ -94,7 +94,7 @@ Surfaces the runtime additions so each feature is verifiable from the terminal.
 Completed as a local Node HTTP/WebSocket backend. The implementation uses Node's
 native `http` server and a small WebSocket adapter, not Express.
 
-- [x] HTTP/WebSocket server wrapping AgentLoop
+- [x] HTTP/WebSocket server wrapping AgentLoop (uses `ws` library for WebSocket)
 - [x] REST API: sessions list, session history, session delete, config read/write
 - [x] WebSocket: streaming agent events, turn rejection, abort, exec approval bridge
 - [x] File system API: directory tree, file content reading

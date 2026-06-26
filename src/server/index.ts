@@ -1,6 +1,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
 
 import type { Config } from "../config/Config.js";
 import { ensureDefaultConfig } from "../config/loadConfig.js";
@@ -37,9 +38,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 3210;
   const server = createHttpServer(handler.handle);
+  const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req, socket, head) => {
-    const handled = handleWebSocketUpgrade(req, socket, head, {
+    const handled = handleWebSocketUpgrade(req, socket, head, wss, {
       workspace,
       state: handler.state,
       sessions: handler.sessions,
