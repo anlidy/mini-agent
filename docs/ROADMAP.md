@@ -103,16 +103,22 @@ native `http` server and a small WebSocket adapter, not Express.
 ### Frontend
 
 - [x] React + TypeScript + Tailwind scaffold
-- [x] Chat interface with streaming text and collapsible tool/thinking chain
-- [x] Session sidebar (list, switch, new session; search/delete deferred)
+- [x] Chat interface with streaming text and tool call chain
+- [x] Session sidebar (list, switch, new session, search)
 - [x] Workspace file browser with recursive tree and text preview
 - [x] Settings view for provider, agent params, search, exec, and tools
 - [x] Session history cache-consistency fix (2026-06-21: shared SessionManager
   between HTTP and WS — covered by `tests/server/session-sync.test.ts`)
-- [ ] Claude-style UI redesign (user requested; design doc upcoming)
-- [ ] Workspace file browser with syntax highlighting (Monaco Editor)
-- [ ] Token usage and performance panel
+- [x] UI redesign (2026-06-30): full-screen layout, collapsible/resizable
+  sidebars, VSCode-style inline `[tool_name]` display with `[tools]` grouping,
+  markdown rendering via `react-markdown` + `remark-gfm`, approval popup above
+  composer, `w-fit` user bubbles, scrollbar at content edge
+- [ ] Rendering pipeline stabilization — `buildTimeline`/`renderTimeline` in
+  `ChatThread.tsx` has regressions in message ordering/spacing after multiple
+  rounds of edits; needs a clean-slate review
+- [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
 - [ ] Dark/light theme
+- [ ] Token usage and performance panel
 
 ## Phase 4 — Architecture Depth
 
