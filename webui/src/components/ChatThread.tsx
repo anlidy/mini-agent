@@ -76,49 +76,128 @@ function buildTimeline(
     segments.filter((s) => s.kind === "tool").map((s) => s.step.id)
   );
 
-  // Combined text of all live text segments — for dedup after session refresh
+  // Content-based fingerprint for tool steps — safety net for ID mismatches
+  // (approve_request and persisted tool_call may use different ids).
+  function toolFingerprint(title: string, detail?: string): string {
+    if (title.startsWith("exec ")) return `exec:${title.slice(5)}`;
+    if (detail) {
+      try {
+        const parsed = JSON.parse(detail) as Record<string, unknown>;
+        if (typeof parsed.command === "string") return `exec:${parsed.command}`;
+      } catch { /* not JSON */ }
+    }
+    return `${title}:${detail?.slice(0, 80) ?? ""}`;
+  }
+  const seenToolKeys = new Set<string>();
+
+  // Combined text of all live text segments — for dedup after session refresh.
   const combinedDraft = segments
     .filter((s) => s.kind === "text")
     .map((s) => s.content)
     .join("");
 
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const normDraft = norm(combinedDraft);
+
+  // Compare against ALL assistant text in the latest turn (after the last
+  // user message).  The model reply may be split across multiple persisted
+  // assistant messages (e.g. when tool calls interleave), so checking only
+  // the last one would never match the full combinedDraft.
+  const lastUserIdx = messages.reduce((max, m, i) => (m.role === "user" ? i : max), -1);
+  const turnAssistantText = messages
+    .slice(lastUserIdx + 1)
+    .filter((m) => m.role === "assistant" && typeof m.content === "string")
+    .map((m) => m.content as string)
+    .join("");
+
   const isDraftPersisted = Boolean(
-    combinedDraft &&
-      messages.some(
-        (m) =>
-          m.role === "assistant" &&
-          typeof m.content === "string" &&
-          m.content === combinedDraft
-      )
+    normDraft && turnAssistantText && norm(turnAssistantText) === normDraft
   );
 
-  // 1) Walk through persisted messages and interleave tool steps
-  for (const msg of messages) {
+  // When the draft is already persisted, the session refresh has completed
+  // and persisted messages are the complete, correctly-ordered source of truth.
+  // Skip ALL live segments so tools stay in their chronological position
+  // (interleaved with text) instead of being pushed to the bottom.
+  if (isDraftPersisted) {
+    // 1) Persisted messages — tools rendered in their correct position
+    for (let mi = 0; mi < messages.length; mi++) {
+      const msg = messages[mi]!;
+      if (msg.role === "user") {
+        items.push({
+          kind: "user",
+          id: `m${mi}-${msg.timestamp}`,
+          content: renderContent(msg.content)
+        });
+      } else if (msg.role === "assistant") {
+        if (typeof msg.content === "string" && msg.content.trim()) {
+          items.push({
+            kind: "assistant",
+            id: `m${mi}-${msg.timestamp}`,
+            content: msg.content
+          });
+        }
+        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+          for (const call of msg.tool_calls) {
+            const id = (call as Record<string, unknown>).id as string;
+            const found = toolSteps.find((s) => s.id === id);
+            if (found) {
+              items.push({
+                kind: "tool",
+                id: found.id,
+                step: {
+                  id: found.id,
+                  kind: "tool" as const,
+                  title: found.title,
+                  status: found.status,
+                  detail: found.result ?? found.args
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+    return items;
+  }
+
+  // --- Live turn: merge persisted history with streaming segments ---
+
+  // 1) Walk through persisted messages and interleave tool steps.
+  //    Prefix keys with index so duplicate timestamps never collide.
+  //    Skip persisted tools whose IDs match live segments (dedup).
+  for (let mi = 0; mi < messages.length; mi++) {
+    const msg = messages[mi]!;
     if (msg.role === "user") {
-      items.push({ kind: "user", id: msg.timestamp, content: renderContent(msg.content) });
+      items.push({
+        kind: "user",
+        id: `m${mi}-${msg.timestamp}`,
+        content: renderContent(msg.content)
+      });
       continue;
     }
 
     if (msg.role === "assistant") {
       if (typeof msg.content === "string" && msg.content.trim()) {
-        items.push({ kind: "assistant", id: msg.timestamp, content: msg.content });
+        items.push({
+          kind: "assistant",
+          id: `m${mi}-${msg.timestamp}`,
+          content: msg.content
+        });
       }
       if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
         for (const call of msg.tool_calls) {
           const id = (call as Record<string, unknown>).id as string;
           const found = toolSteps.find((s) => s.id === id);
           if (found && !liveStepIds.has(id)) {
-            items.push({
-              kind: "tool",
+            const step = {
               id: found.id,
-              step: {
-                id: found.id,
-                kind: "tool",
-                title: found.title,
-                status: found.status,
-                detail: found.result ?? found.args
-              }
-            });
+              kind: "tool" as const,
+              title: found.title,
+              status: found.status,
+              detail: found.result ?? found.args
+            };
+            seenToolKeys.add(toolFingerprint(step.title, step.detail));
+            items.push({ kind: "tool", id: found.id, step });
           }
         }
       }
@@ -126,7 +205,7 @@ function buildTimeline(
     }
   }
 
-  // 2) Current user message — AFTER persisted messages, and only if not already present
+  // 2) Current user message — AFTER persisted messages, deduped
   if (currentUserMessage && !messages.some(
     (m) => m.role === "user" && renderContent(m.content) === currentUserMessage
   )) {
@@ -136,12 +215,12 @@ function buildTimeline(
   // 3) Live segments — interleaved text and tool steps in stream order
   for (const seg of segments) {
     if (seg.kind === "text") {
-      if (!isDraftPersisted) {
-        items.push({ kind: "assistant", id: seg.id, content: seg.content });
-      }
+      items.push({ kind: "assistant", id: seg.id, content: seg.content });
     } else {
-      // Tool segment — persisted loop already skips duplicates via liveStepIds
-      items.push({ kind: "tool", id: seg.step.id, step: seg.step });
+      const key = toolFingerprint(seg.step.title, seg.step.detail);
+      if (!seenToolKeys.has(key)) {
+        items.push({ kind: "tool", id: seg.step.id, step: seg.step });
+      }
     }
   }
 

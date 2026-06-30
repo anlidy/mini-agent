@@ -58,6 +58,10 @@ export function useAgentSocket(sessionKey: string, options: UseAgentSocketOption
 
   /** Build a fingerprint for a tool step — used to dedup approval vs tool_call. */
   function toolStepKey(step: ExecutionStep): string {
+    // Approval steps encode the shell command in the title: "exec <command>"
+    if (step.title.startsWith("exec ")) {
+      return `exec:${step.title.slice(5)}`;
+    }
     if (step.detail) {
       try {
         const parsed = JSON.parse(step.detail) as Record<string, unknown>;
@@ -138,11 +142,26 @@ export function useAgentSocket(sessionKey: string, options: UseAgentSocketOption
     if (message.type === "approve_request") {
       const nextApproval = { id: message.id, command: message.command };
       setApproval(nextApproval);
-      appendToolStep({
-        id: message.id,
-        kind: "tool",
-        title: `exec ${message.command}`,
-        status: "approval"
+      // Only create a tool step if one doesn't already exist for this command
+      // (a tool_call may have arrived first with a different id).
+      const key = `exec:${message.command}`;
+      setSegments((current) => {
+        const exists = current.some(
+          (s) => s.kind === "tool" && toolStepKey(s.step) === key
+        );
+        if (exists) return current;
+        return [
+          ...current,
+          {
+            kind: "tool" as const,
+            step: {
+              id: message.id,
+              kind: "tool" as const,
+              title: `exec ${message.command}`,
+              status: "approval" as const
+            }
+          }
+        ];
       });
       return;
     }

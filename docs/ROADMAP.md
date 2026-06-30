@@ -113,9 +113,10 @@ native `http` server and a small WebSocket adapter, not Express.
   sidebars, VSCode-style inline `[tool_name]` display with `[tools]` grouping,
   markdown rendering via `react-markdown` + `remark-gfm`, approval popup above
   composer, `w-fit` user bubbles, scrollbar at content edge
-- [ ] Rendering pipeline stabilization — `buildTimeline`/`renderTimeline` in
-  `ChatThread.tsx` has regressions in message ordering/spacing after multiple
-  rounds of edits; needs a clean-slate review
+- [x] Rendering pipeline stabilization — `ChatThread.tsx` `buildTimeline`/`renderTimeline`
+  rewritten (2026-06-30): ordered `StreamSegment` stream replaces flat `assistantDraft` +
+  `steps`; timeline interleaves text and tool calls in stream order; dedup prevents
+  duplicate messages and approval/tool_call double rendering
 - [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
 - [ ] Dark/light theme
 - [ ] Token usage and performance panel

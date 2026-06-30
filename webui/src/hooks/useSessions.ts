@@ -55,7 +55,11 @@ export function useSessions(defaultKey = "default") {
   const loadSession = useCallback(async (key: string) => {
     const requestId = ++sessionRequestRef.current;
     setActiveKey(key);
-    setActiveSession(undefined); // clear stale data while loading new session
+    // Only clear when switching to a *different* session.  Same-key
+    // refreshes keep the old data visible while the fetch is in-flight,
+    // avoiding a flash of empty state that can cause message duplication
+    // when combined with live segments clearing.
+    setActiveSession((prev) => (prev?.key === key ? prev : undefined));
     try {
       const nextSession = await apiGet<Session>(`/api/sessions/${encodeURIComponent(key)}`);
       if (mountedRef.current && requestId === sessionRequestRef.current) {
