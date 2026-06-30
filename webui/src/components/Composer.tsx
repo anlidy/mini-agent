@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import { Send, Square } from "lucide-react";
 
 interface ComposerProps {
@@ -19,20 +20,29 @@ export default function Composer({
   onSend,
   onAbort
 }: ComposerProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    }
+  }, [value]);
+
   function submit() {
     const trimmed = value.trim();
-    if (!trimmed || disabled) {
-      return;
-    }
-
+    if (!trimmed || disabled) return;
     onSend(trimmed);
   }
 
   return (
-    <footer className="border-t border-line py-3.5">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5 rounded-[10px] bg-white p-2.5 shadow-[inset_0_0_0_1px_#d4dad6]">
+    <div className="border-t border-line bg-surface px-5 py-3">
+      <div className="flex items-end gap-2 rounded-xl border border-line bg-white px-3 py-2 shadow-sm focus-within:border-accent/40 focus-within:shadow-md transition-shadow">
         <textarea
-          className="min-h-14 resize-none border-0 bg-transparent text-sm leading-relaxed text-text outline-none placeholder:text-[#9aa2aa]"
+          ref={textareaRef}
+          className="min-h-[40px] max-h-[200px] flex-1 resize-none border-0 bg-transparent py-1 text-sm leading-relaxed text-text outline-none placeholder:text-[#9aa2aa]"
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -41,25 +51,27 @@ export default function Composer({
               submit();
             }
           }}
-          placeholder="Ask mini-agent to inspect files, edit code, run tools, or continue this task..."
+          placeholder="Ask mini-agent…"
+          rows={1}
           value={value}
         />
         <button
           aria-label={active ? "Abort turn" : "Send"}
-          className={`grid h-[38px] w-[38px] place-items-center rounded-ui text-white disabled:opacity-40 ${
-            active ? "bg-red" : "bg-ink"
+          className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg text-white transition-colors disabled:opacity-40 ${
+            active
+              ? "bg-red hover:bg-red/80"
+              : "bg-ink hover:bg-ink/80"
           }`}
           disabled={active ? aborting : disabled || !value.trim()}
           onClick={active ? onAbort : submit}
           type="button"
         >
-          {active ? <Square size={14} fill="currentColor" /> : <Send size={16} />}
+          {active ? <Square size={14} fill="currentColor" /> : <Send size={15} />}
         </button>
       </div>
-      <div className="mt-2 flex justify-between font-mono text-[11px] text-[#9aa2aa]">
-        <span>Enter to send</span>
-        <span>Shift+Enter newline</span>
+      <div className="mt-1.5 flex justify-center">
+        <span className="font-mono text-[11px] text-[#9aa2aa]">Enter to send · Shift+Enter for newline</span>
       </div>
-    </footer>
+    </div>
   );
 }

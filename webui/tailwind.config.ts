@@ -15,7 +15,10 @@ export default {
         "accent-soft": "#edf3ff",
         "approval-soft": "#fff6df",
         green: "#2d7a58",
-        red: "#b42318"
+        red: "#b42318",
+        sidebar: "#fafbfa",
+        connector: "#d0d7de",
+        "tool-bg": "#f8f9fb"
       },
       borderRadius: {
         ui: "8px"

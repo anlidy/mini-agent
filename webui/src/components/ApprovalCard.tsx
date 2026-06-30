@@ -1,3 +1,4 @@
+import { ShieldAlert } from "lucide-react";
 import type { ApprovalRequest } from "../hooks/useAgentSocket";
 
 interface ApprovalCardProps {
@@ -6,39 +7,35 @@ interface ApprovalCardProps {
 }
 
 export default function ApprovalCard({ approval, onResolve }: ApprovalCardProps) {
-  if (!approval) {
+  if (!approval || approval.resolved) {
     return null;
   }
 
   return (
-    <section className="mb-5 max-w-[520px] rounded-ui bg-approval-soft p-3.5">
-      <strong className="mb-1 block text-sm text-ink">Approve command?</strong>
-      <p className="mb-2.5 text-xs leading-relaxed text-muted">
-        The agent wants to run this command in the current workspace.
-      </p>
-      <code className="block break-words rounded-[7px] bg-white/70 px-2.5 py-2 font-mono text-xs text-ink">
+    <div className="mx-auto mb-3 max-w-[800px] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 shadow-lg">
+      <div className="mb-2 flex items-center gap-2">
+        <ShieldAlert size={15} className="text-amber-600" />
+        <span className="text-[13px] font-semibold text-ink">Approve command?</span>
+      </div>
+      <code className="mb-3 block break-words rounded border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-ink">
         {approval.command}
       </code>
-      {approval.resolved ? (
-        <div className="mt-2.5 font-mono text-xs text-muted">{approval.resolved}</div>
-      ) : (
-        <div className="mt-2.5 flex gap-2">
-          <button
-            className="h-8 rounded-[7px] bg-ink px-3 text-[13px] font-bold text-white"
-            onClick={() => onResolve(true)}
-            type="button"
-          >
-            Approve
-          </button>
-          <button
-            className="h-8 rounded-[7px] border border-red/20 bg-white/60 px-3 text-[13px] font-bold text-red"
-            onClick={() => onResolve(false)}
-            type="button"
-          >
-            Deny
-          </button>
-        </div>
-      )}
-    </section>
+      <div className="flex gap-2">
+        <button
+          className="h-7 rounded-md bg-ink px-3 text-[12px] font-medium text-white hover:bg-ink/80"
+          onClick={() => onResolve(true)}
+          type="button"
+        >
+          Approve
+        </button>
+        <button
+          className="h-7 rounded-md border border-red/30 bg-white px-3 text-[12px] font-medium text-red hover:bg-red/5"
+          onClick={() => onResolve(false)}
+          type="button"
+        >
+          Deny
+        </button>
+      </div>
+    </div>
   );
 }

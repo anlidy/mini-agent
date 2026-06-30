@@ -55,6 +55,7 @@ export function useSessions(defaultKey = "default") {
   const loadSession = useCallback(async (key: string) => {
     const requestId = ++sessionRequestRef.current;
     setActiveKey(key);
+    setActiveSession(undefined); // clear stale data while loading new session
     try {
       const nextSession = await apiGet<Session>(`/api/sessions/${encodeURIComponent(key)}`);
       if (mountedRef.current && requestId === sessionRequestRef.current) {

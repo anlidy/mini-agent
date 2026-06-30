@@ -23,10 +23,11 @@ describe("ApprovalCard", () => {
     expect(onResolve).toHaveBeenCalledWith(false);
   });
 
-  it("shows resolved approvals without action buttons", () => {
-    render(<ApprovalCard approval={{ id: "1", command: "npm test", resolved: "approved" }} onResolve={vi.fn()} />);
+  it("does not render when already resolved", () => {
+    const { container } = render(
+      <ApprovalCard approval={{ id: "1", command: "npm test", resolved: "approved" }} onResolve={vi.fn()} />
+    );
 
-    expect(screen.getByText("approved")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 });

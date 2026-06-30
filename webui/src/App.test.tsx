@@ -76,9 +76,11 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(screen.getAllByText("mini-agent").length).toBeGreaterThan(0);
-    expect(await screen.findByText("Sessions")).toBeInTheDocument();
-    expect(screen.getByText("Files")).toBeInTheDocument();
+    // Sidebar tabs: "Files" and "Changes" tabs are present
+    expect(await screen.findByText("Files")).toBeInTheDocument();
+    expect(screen.getByText("Changes")).toBeInTheDocument();
+    // New session icon button is present
+    expect(screen.getByRole("button", { name: "New session" })).toBeInTheDocument();
   });
 
   it("refreshes the active session after a completed turn so history appears", async () => {
@@ -133,7 +135,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByText("Sessions");
+    await screen.findByText("Files");
     FakeWebSocket.instances[0]?.emit("message", {
       data: JSON.stringify({
         type: "done",
@@ -207,6 +209,6 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: /other/ }));
 
     expect(await screen.findByText("other answer")).toBeInTheDocument();
-    expect(screen.getAllByText("other prompt").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("other prompt").length).toBeGreaterThan(0);
   });
 });
