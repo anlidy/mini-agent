@@ -1,11 +1,14 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color: #30353b;
-  background: #f6f7f5;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+@layer base {
+  html {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
 }
 
 * {
@@ -55,4 +58,43 @@ textarea {
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
+}
+
+@layer base {
+  :root {
+    --background: #f6f7f5;
+    --foreground: #30353b;
+    --card: #ffffff;
+    --card-foreground: #30353b;
+    --popover: #ffffff;
+    --popover-foreground: #30353b;
+    --primary: #315fbd;
+    --primary-foreground: #ffffff;
+    --secondary: #f4f6f4;
+    --secondary-foreground: #17191d;
+    --muted: #f4f6f4;
+    --muted-foreground: #6f7781;
+    --accent: #edf3ff;
+    --accent-foreground: #315fbd;
+    --destructive: #b42318;
+    --destructive-foreground: #ffffff;
+    --border: #e1e5e2;
+    --input: #e1e5e2;
+    --ring: #315fbd;
+    --radius: 8px;
+    --sidebar: #fafbfa;
+    --sidebar-foreground: #30353b;
+    --sidebar-primary: #315fbd;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f4f6f4;
+    --sidebar-accent-foreground: #30353b;
+    --sidebar-border: #e1e5e2;
+    --sidebar-ring: #315fbd;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import SettingsView from "./SettingsView";
+import SettingsView from "@/components/SettingsView";
 
 afterEach(() => {
   vi.restoreAllMocks();

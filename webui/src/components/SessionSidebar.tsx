@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, MessageSquarePlus, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft, MessageSquarePlus, Search, Settings } from "lucide-react";
 
 import type { SessionSummary } from "../api/types";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface SessionSidebarProps {
   sessions: SessionSummary[];
@@ -18,6 +21,7 @@ export default function SessionSidebar({
   onNew,
   onToggleCollapse
 }: SessionSidebarProps) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -30,32 +34,45 @@ export default function SessionSidebar({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top row: collapse + new session */}
+      {/* Top row: collapse + new session + settings */}
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <button
-          className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-line/50 hover:text-text"
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Collapse panel"
           onClick={onToggleCollapse}
           type="button"
-          aria-label="Collapse panel"
         >
           <ChevronLeft size={15} />
-        </button>
-        <button
-          className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-line/50 hover:text-text"
-          onClick={onNew}
-          type="button"
-          aria-label="New session"
-        >
-          <MessageSquarePlus size={15} />
-        </button>
+        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Settings"
+            onClick={() => navigate("/settings")}
+            type="button"
+          >
+            <Settings size={15} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New session"
+            onClick={onNew}
+            type="button"
+          >
+            <MessageSquarePlus size={15} />
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
       <div className="px-3 pb-2">
         <div className="flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5">
-          <Search size={13} className="shrink-0 text-muted" />
-          <input
-            className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-[#9aa2aa]"
+          <Search size={13} className="shrink-0 text-muted-foreground" />
+          <Input
+            className="h-auto border-0 bg-transparent p-0 text-[13px] shadow-none focus-visible:ring-0"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search sessions..."
@@ -67,7 +84,7 @@ export default function SessionSidebar({
       {/* Session list */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {filtered.length === 0 ? (
-          <div className="mt-8 text-center text-[13px] text-muted">
+          <div className="mt-8 text-center text-[13px] text-muted-foreground">
             {query.trim() ? "No matching sessions" : "No sessions yet"}
           </div>
         ) : (
@@ -77,7 +94,7 @@ export default function SessionSidebar({
               className={`mb-0.5 w-full rounded-lg px-2.5 py-2 text-left transition-colors ${
                 session.key === activeKey
                   ? "bg-white text-text shadow-[inset_0_0_0_1px_#e1e5e2]"
-                  : "text-muted hover:bg-white/60"
+                  : "text-muted-foreground hover:bg-white/60"
               }`}
               aria-current={session.key === activeKey ? "page" : undefined}
               onClick={() => onSelect(session.key)}

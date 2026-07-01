@@ -9,6 +9,8 @@ export interface ToolStep {
   title: string;
   status: ToolStepStatus;
   detail?: string;
+  /** Distinguishes tool call arguments from tool results for rendering. */
+  detailKind?: "args" | "result";
 }
 
 interface ToolCallCardProps {
@@ -18,11 +20,15 @@ interface ToolCallCardProps {
   nested?: boolean;
 }
 
-function parseDetail(detail?: string): { input?: string; output?: string } {
+function parseDetail(detail?: string, detailKind?: "args" | "result"): { input?: string; output?: string } {
   if (!detail) return {};
   try {
     const parsed = JSON.parse(detail);
     if (typeof parsed === "object" && parsed !== null) {
+      // When we know it's a result, treat JSON as output instead of input.
+      if (detailKind === "result") {
+        return { output: JSON.stringify(parsed, null, 2) };
+      }
       return { input: JSON.stringify(parsed, null, 2) };
     }
   } catch { /* not JSON */ }
@@ -31,7 +37,7 @@ function parseDetail(detail?: string): { input?: string; output?: string } {
 
 export default function ToolCallCard({ step, isLast, nested = false }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const { input, output } = parseDetail(step.detail);
+  const { input, output } = parseDetail(step.detail, step.detailKind);
   const hasContent = Boolean(input || output);
   const running = step.status === "pending" || step.status === "approval";
   const error = step.status === "error";
@@ -52,7 +58,7 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
       <div className="min-w-0 flex-1">
         <button
           className={`group inline-flex items-center gap-1 rounded px-1.5 leading-relaxed transition-colors -ml-0.5 ${
-            error ? "text-red/80" : running ? "text-accent/80" : "text-muted"
+            error ? "text-red/80" : running ? "text-accent/80" : "text-muted-foreground"
           } hover:bg-line/30`}
           onClick={() => setExpanded((v) => !v)}
           type="button"
@@ -75,7 +81,7 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
             {input && (
               <div>
                 <div className="mb-0.5 font-mono text-[10px] text-[#9aa2aa]">args</div>
-                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted max-h-32 overflow-y-auto">
+                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted-foreground max-h-32 overflow-y-auto">
                   {input}
                 </pre>
               </div>
@@ -83,7 +89,7 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
             {output && (
               <div>
                 <div className="mb-0.5 font-mono text-[10px] text-[#9aa2aa]">result</div>
-                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted max-h-32 overflow-y-auto">
+                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted-foreground max-h-32 overflow-y-auto">
                   {output}
                 </pre>
               </div>

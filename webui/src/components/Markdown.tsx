@@ -40,7 +40,7 @@ export default function Markdown({ children }: MarkdownProps) {
         h3: ({ children: content }) => <h3 className="my-1.5 text-sm font-bold text-ink">{content}</h3>,
         // Blockquote
         blockquote: ({ children: content }) => (
-          <blockquote className="my-1 border-l-2 border-accent/30 pl-3 italic text-muted">
+          <blockquote className="my-1 border-l-2 border-accent/30 pl-3 italic text-muted-foreground">
             {content}
           </blockquote>
         ),

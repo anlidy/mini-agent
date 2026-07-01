@@ -31,10 +31,17 @@ Web UI development (run from source, auto-restart on change — no build step ne
 npm run server:dev          # backend only (tsx watch on src/server.ts, :3210)
 npm run web:dev             # frontend only (vite, :5173, proxies /api and /ws)
 npm run web:full            # both concurrently (Ctrl-C stops both cleanly)
+npm run web:test            # run frontend Vitest tests (webui/tests/)
 ```
 
 Production Web UI builds emit to `dist/webui`; do not derive that static path from
 `--workspace`, which is the user project root.
+
+The Web UI frontend (`webui/`) uses react-router v7 (3 routes: `/chat/:sessionId`,
+`/settings`), shadcn/ui v4 (`@base-ui/react` primitives), and Tailwind CSS.
+Tests live under `webui/tests/` (19 files, 114 cases). Large files were split:
+`ChatThread.tsx` delegates to `lib/timeline.ts` + `TimelineRenderer` + `ToolGroup`;
+`useAgentSocket.ts` delegates to `lib/segmentReducer.ts` for pure segment operations.
 
 ## Architecture Boundaries
 

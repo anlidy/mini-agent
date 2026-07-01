@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createAgentSocket } from "./ws";
+import { createAgentSocket } from "@/api/ws";
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];

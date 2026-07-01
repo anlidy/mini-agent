@@ -93,7 +93,9 @@ npm run build
 node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
 ```
 
-The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It serves production frontend build output from `dist/webui`; this path is independent of `--workspace`.
+The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It serves the React frontend build output from `dist/webui`; this path is independent of `--workspace`.
+
+Frontend stack: React 19 + TypeScript + Tailwind CSS 3 + Vite. Uses react-router v7 for client-side routing (`/chat/:sessionId`, `/settings`) and shadcn/ui v4 (`@base-ui/react` primitives) for UI components. Tests under `webui/tests/` (19 files, 114 cases). See `docs/specs/2026-06-30-webui-redesign.md` for the architecture redesign.
 
 Frontend development (all run from source, no build step for the backend):
 
@@ -249,13 +251,13 @@ const agent = new AgentLoop({
 ```bash
 npm run repl         # start CLI REPL
 npm run build        # compile TypeScript to dist/ and copy prompt templates
-npm test             # run Vitest tests
+npm test             # run Vitest tests (includes webui/tests/)
 npm run typecheck    # run TypeScript type checking
 npm run server:dev   # start backend dev server (tsx watch, :3210, auto-restart)
 npm run web:dev      # start Vite for the React frontend (:5173)
 npm run web:full     # start both backend + frontend concurrently
 npm run web:build    # build the React frontend into dist/webui
-npm run web:test     # run frontend Vitest tests
+npm run web:test     # run frontend Vitest tests only
 node dist/server.js  # start the local HTTP/WebSocket backend after build
 ```
 

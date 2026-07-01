@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import ChatThread from "./ChatThread";
+import ChatThread from "@/components/ChatThread";
 
 describe("ChatThread", () => {
   it("renders the abort control in the composer action while a turn is active", async () => {

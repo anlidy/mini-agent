@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import Composer from "./Composer";
+import Composer from "@/components/Composer";
 
 describe("Composer", () => {
   it("sends trimmed text on Enter and keeps the draft until parent clears it", async () => {

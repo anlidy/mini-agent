@@ -1,5 +1,6 @@
 import { ShieldAlert } from "lucide-react";
 import type { ApprovalRequest } from "../hooks/useAgentSocket";
+import { Button } from "./ui/button";
 
 interface ApprovalCardProps {
   approval?: ApprovalRequest;
@@ -21,20 +22,18 @@ export default function ApprovalCard({ approval, onResolve }: ApprovalCardProps)
         {approval.command}
       </code>
       <div className="flex gap-2">
-        <button
-          className="h-7 rounded-md bg-ink px-3 text-[12px] font-medium text-white hover:bg-ink/80"
-          onClick={() => onResolve(true)}
-          type="button"
-        >
+        <Button size="sm" onClick={() => onResolve(true)} type="button">
           Approve
-        </button>
-        <button
-          className="h-7 rounded-md border border-red/30 bg-white px-3 text-[12px] font-medium text-red hover:bg-red/5"
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-red/30 text-red hover:bg-red/5"
           onClick={() => onResolve(false)}
           type="button"
         >
           Deny
-        </button>
+        </Button>
       </div>
     </div>
   );

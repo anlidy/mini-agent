@@ -117,6 +117,17 @@ native `http` server and a small WebSocket adapter, not Express.
   rewritten (2026-06-30): ordered `StreamSegment` stream replaces flat `assistantDraft` +
   `steps`; timeline interleaves text and tool calls in stream order; dedup prevents
   duplicate messages and approval/tool_call double rendering
+- [x] Client-side routing (2026-06-30): react-router v7 with `/chat/:sessionId`
+  and `/settings` routes; `App.tsx` replaced by `RootLayout` + `ChatPage` +
+  `SettingsPage`; settings accessible via sidebar gear icon (was orphaned)
+- [x] Test consolidation & refactoring (2026-06-30): tests unified under
+  `webui/tests/` (19 files, 114 cases), mirroring `src/` structure; `ChatThread.tsx`
+  split into `lib/timeline.ts` + `TimelineRenderer` + `ToolGroup` (437→117 lines);
+  `useAgentSocket.ts` split into `lib/segmentReducer.ts` (348→263 lines)
+- [x] Component library (2026-06-30): shadcn/ui v4 (`@base-ui/react` primitives —
+  Button, Input, Textarea, Select, Dialog); CSS variables mapped to existing
+  design tokens; migrated Composer, ApprovalCard, ResizablePanel, SessionSidebar,
+  FilesSidebar, SettingsView
 - [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
 - [ ] Dark/light theme
 - [ ] Token usage and performance panel

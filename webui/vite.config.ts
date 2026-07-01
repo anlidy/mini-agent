@@ -1,11 +1,21 @@
 import react from "@vitejs/plugin-react";
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src")
+    }
+  },
+  css: {
+    transformer: "postcss"
+  },
   build: {
     outDir: "../dist/webui",
-    emptyOutDir: true
+    emptyOutDir: true,
+    cssMinify: "esbuild"
   },
   server: {
     host: "127.0.0.1",
@@ -20,6 +30,6 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"]
+    setupFiles: ["./tests/setup.ts"]
   }
 });

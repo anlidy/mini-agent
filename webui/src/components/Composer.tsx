@@ -1,5 +1,7 @@
 import { useRef, useEffect } from "react";
 import { Send, Square } from "lucide-react";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
 
 interface ComposerProps {
   disabled: boolean;
@@ -40,9 +42,9 @@ export default function Composer({
   return (
     <div className="border-t border-line bg-surface px-5 py-3">
       <div className="flex items-end gap-2 rounded-xl border border-line bg-white px-3 py-2 shadow-sm focus-within:border-accent/40 focus-within:shadow-md transition-shadow">
-        <textarea
+        <Textarea
           ref={textareaRef}
-          className="min-h-[40px] max-h-[200px] flex-1 resize-none border-0 bg-transparent py-1 text-sm leading-relaxed text-text outline-none placeholder:text-[#9aa2aa]"
+          className="min-h-[40px] max-h-[200px] flex-1 resize-none border-0 bg-transparent py-1 text-sm leading-relaxed shadow-none focus-visible:ring-0"
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -55,19 +57,17 @@ export default function Composer({
           rows={1}
           value={value}
         />
-        <button
+        <Button
           aria-label={active ? "Abort turn" : "Send"}
-          className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg text-white transition-colors disabled:opacity-40 ${
-            active
-              ? "bg-red hover:bg-red/80"
-              : "bg-ink hover:bg-ink/80"
-          }`}
+          className="h-[34px] w-[34px] shrink-0"
+          variant={active ? "destructive" : "default"}
+          size="icon"
           disabled={active ? aborting : disabled || !value.trim()}
           onClick={active ? onAbort : submit}
           type="button"
         >
           {active ? <Square size={14} fill="currentColor" /> : <Send size={15} />}
-        </button>
+        </Button>
       </div>
       <div className="mt-1.5 flex justify-center">
         <span className="font-mono text-[11px] text-[#9aa2aa]">Enter to send · Shift+Enter for newline</span>

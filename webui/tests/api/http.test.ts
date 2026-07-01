@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiDelete, apiGet, apiPut } from "./http";
+import { apiDelete, apiGet, apiPut } from "@/api/http";
 
 afterEach(() => {
   vi.restoreAllMocks();

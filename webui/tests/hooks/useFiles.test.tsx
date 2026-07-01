@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { FileContent, FileTreeNode } from "../api/types";
-import { useFiles } from "./useFiles";
+import type { FileContent, FileTreeNode } from "@/api/types";
+import { useFiles } from "@/hooks/useFiles";
 
 afterEach(() => {
   vi.restoreAllMocks();

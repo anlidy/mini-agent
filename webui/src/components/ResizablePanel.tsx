@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-// ResizablePanel only handles the collapsed state toggle.
-// The expand-button-in-collapsed-bar stays here; the collapse button
-// is rendered by the sidebar content (e.g. SessionSidebar) so it can
-// share a row with other actions.
+import { Button } from "./ui/button";
 
 interface ResizablePanelProps {
   collapsed: boolean;
@@ -70,14 +66,15 @@ export default function ResizablePanel({
   if (collapsed) {
     return (
       <div className="flex shrink-0 flex-col items-center border-line bg-sidebar pt-3" style={{ width: 32 }}>
-        <button
-          className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-line/50 hover:text-text"
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Expand ${side} panel`}
           onClick={onToggle}
           type="button"
-          aria-label={`Expand ${side} panel`}
         >
           {side === "left" ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
-        </button>
+        </Button>
       </div>
     );
   }

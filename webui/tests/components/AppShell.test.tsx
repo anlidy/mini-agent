@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import AppShell from "./AppShell";
+import AppShell from "@/components/AppShell";
 
 const defaultProps = {
   leftCollapsed: false,
@@ -44,5 +44,21 @@ describe("AppShell", () => {
 
     expect(container.firstElementChild).toHaveClass("h-screen", "w-screen");
     expect(screen.getByRole("main")).toHaveClass("overflow-hidden");
+  });
+
+  it("hides the right panel when filesSidebar is null", () => {
+    render(
+      <AppShell
+        {...defaultProps}
+        sessionSidebar={<div>Sessions region</div>}
+        filesSidebar={null}
+      >
+        <div>Chat region</div>
+      </AppShell>
+    );
+
+    expect(screen.getByText("Sessions region")).toBeInTheDocument();
+    expect(screen.getByText("Chat region")).toBeInTheDocument();
+    expect(screen.queryByText("Files region")).not.toBeInTheDocument();
   });
 });

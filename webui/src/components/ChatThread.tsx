@@ -2,333 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MessageRecord } from "../api/types";
 import type { ApprovalRequest, StreamSegment } from "../hooks/useAgentSocket";
+import { buildTimeline, extractToolSteps, renderContent } from "../lib/timeline";
 import ApprovalCard from "./ApprovalCard";
 import Composer from "./Composer";
-import Markdown from "./Markdown";
-import ToolCallCard, { type ToolStep } from "./ToolCallCard";
-
-/* ------------------------------------------------------------------ */
-/*  Timeline item type                                                */
-/* ------------------------------------------------------------------ */
-
-type TimelineItem =
-  | { kind: "user"; id: string; content: string }
-  | { kind: "assistant"; id: string; content: string }
-  | { kind: "tool"; id: string; step: ToolStep };
-
-/* ------------------------------------------------------------------ */
-/*  Parse persisted messages into tool steps                          */
-/* ------------------------------------------------------------------ */
-
-interface ParsedToolStep {
-  id: string;
-  title: string;
-  status: ToolStep["status"];
-  args?: string;
-  result?: string;
-}
-
-function extractToolSteps(messages: MessageRecord[]): ParsedToolStep[] {
-  const steps = new Map<string, ParsedToolStep>();
-
-  for (const msg of messages) {
-    if (msg.role === "assistant" && msg.tool_calls) {
-      const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [msg.tool_calls];
-      for (const call of calls) {
-        if (call && typeof call === "object") {
-          const id = (call as Record<string, unknown>).id as string;
-          const fn = (call as Record<string, unknown>).function as Record<string, unknown> | undefined;
-          const name = (fn?.name as string) ?? "unknown";
-          const args = typeof fn?.arguments === "string" ? fn.arguments : JSON.stringify(fn?.arguments ?? {}, null, 2);
-          if (id) {
-            steps.set(id, { id, title: name, status: "pending", args });
-          }
-        }
-      }
-    }
-
-    if (msg.role === "tool" && msg.tool_call_id && typeof msg.content === "string") {
-      const step = steps.get(msg.tool_call_id);
-      if (step) {
-        step.result = msg.content;
-        step.status = "ok";
-      }
-    }
-  }
-
-  return Array.from(steps.values());
-}
-
-/* ------------------------------------------------------------------ */
-/*  Build a chronologically-interleaved timeline                      */
-/* ------------------------------------------------------------------ */
-
-function buildTimeline(
-  messages: MessageRecord[],
-  toolSteps: ParsedToolStep[],
-  segments: StreamSegment[],
-  currentUserMessage: string
-): TimelineItem[] {
-  const items: TimelineItem[] = [];
-
-  // IDs of live tool segments — used to dedup persisted tool steps
-  const liveStepIds = new Set(
-    segments.filter((s) => s.kind === "tool").map((s) => s.step.id)
-  );
-
-  // Content-based fingerprint for tool steps — safety net for ID mismatches
-  // (approve_request and persisted tool_call may use different ids).
-  function toolFingerprint(title: string, detail?: string): string {
-    if (title.startsWith("exec ")) return `exec:${title.slice(5)}`;
-    if (detail) {
-      try {
-        const parsed = JSON.parse(detail) as Record<string, unknown>;
-        if (typeof parsed.command === "string") return `exec:${parsed.command}`;
-      } catch { /* not JSON */ }
-    }
-    return `${title}:${detail?.slice(0, 80) ?? ""}`;
-  }
-  const seenToolKeys = new Set<string>();
-
-  // Combined text of all live text segments — for dedup after session refresh.
-  const combinedDraft = segments
-    .filter((s) => s.kind === "text")
-    .map((s) => s.content)
-    .join("");
-
-  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
-  const normDraft = norm(combinedDraft);
-
-  // Compare against ALL assistant text in the latest turn (after the last
-  // user message).  The model reply may be split across multiple persisted
-  // assistant messages (e.g. when tool calls interleave), so checking only
-  // the last one would never match the full combinedDraft.
-  const lastUserIdx = messages.reduce((max, m, i) => (m.role === "user" ? i : max), -1);
-  const turnAssistantText = messages
-    .slice(lastUserIdx + 1)
-    .filter((m) => m.role === "assistant" && typeof m.content === "string")
-    .map((m) => m.content as string)
-    .join("");
-
-  const isDraftPersisted = Boolean(
-    normDraft && turnAssistantText && norm(turnAssistantText) === normDraft
-  );
-
-  // When the draft is already persisted, the session refresh has completed
-  // and persisted messages are the complete, correctly-ordered source of truth.
-  // Skip ALL live segments so tools stay in their chronological position
-  // (interleaved with text) instead of being pushed to the bottom.
-  if (isDraftPersisted) {
-    // 1) Persisted messages — tools rendered in their correct position
-    for (let mi = 0; mi < messages.length; mi++) {
-      const msg = messages[mi]!;
-      if (msg.role === "user") {
-        items.push({
-          kind: "user",
-          id: `m${mi}-${msg.timestamp}`,
-          content: renderContent(msg.content)
-        });
-      } else if (msg.role === "assistant") {
-        if (typeof msg.content === "string" && msg.content.trim()) {
-          items.push({
-            kind: "assistant",
-            id: `m${mi}-${msg.timestamp}`,
-            content: msg.content
-          });
-        }
-        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-          for (const call of msg.tool_calls) {
-            const id = (call as Record<string, unknown>).id as string;
-            const found = toolSteps.find((s) => s.id === id);
-            if (found) {
-              items.push({
-                kind: "tool",
-                id: found.id,
-                step: {
-                  id: found.id,
-                  kind: "tool" as const,
-                  title: found.title,
-                  status: found.status,
-                  detail: found.result ?? found.args
-                }
-              });
-            }
-          }
-        }
-      }
-    }
-    return items;
-  }
-
-  // --- Live turn: merge persisted history with streaming segments ---
-
-  // 1) Walk through persisted messages and interleave tool steps.
-  //    Prefix keys with index so duplicate timestamps never collide.
-  //    Skip persisted tools whose IDs match live segments (dedup).
-  for (let mi = 0; mi < messages.length; mi++) {
-    const msg = messages[mi]!;
-    if (msg.role === "user") {
-      items.push({
-        kind: "user",
-        id: `m${mi}-${msg.timestamp}`,
-        content: renderContent(msg.content)
-      });
-      continue;
-    }
-
-    if (msg.role === "assistant") {
-      if (typeof msg.content === "string" && msg.content.trim()) {
-        items.push({
-          kind: "assistant",
-          id: `m${mi}-${msg.timestamp}`,
-          content: msg.content
-        });
-      }
-      if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-        for (const call of msg.tool_calls) {
-          const id = (call as Record<string, unknown>).id as string;
-          const found = toolSteps.find((s) => s.id === id);
-          if (found && !liveStepIds.has(id)) {
-            const step = {
-              id: found.id,
-              kind: "tool" as const,
-              title: found.title,
-              status: found.status,
-              detail: found.result ?? found.args
-            };
-            seenToolKeys.add(toolFingerprint(step.title, step.detail));
-            items.push({ kind: "tool", id: found.id, step });
-          }
-        }
-      }
-      continue;
-    }
-  }
-
-  // 2) Current user message — AFTER persisted messages, deduped
-  if (currentUserMessage && !messages.some(
-    (m) => m.role === "user" && renderContent(m.content) === currentUserMessage
-  )) {
-    items.push({ kind: "user", id: "current", content: currentUserMessage });
-  }
-
-  // 3) Live segments — interleaved text and tool steps in stream order
-  for (const seg of segments) {
-    if (seg.kind === "text") {
-      items.push({ kind: "assistant", id: seg.id, content: seg.content });
-    } else {
-      const key = toolFingerprint(seg.step.title, seg.step.detail);
-      if (!seenToolKeys.has(key)) {
-        items.push({ kind: "tool", id: seg.step.id, step: seg.step });
-      }
-    }
-  }
-
-  return items;
-}
-
-function renderContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  return JSON.stringify(content, null, 2);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Tool group — wraps consecutive tool calls                        */
-/* ------------------------------------------------------------------ */
-
-function ToolGroup({ steps }: { steps: ToolStep[] }) {
-  const [expanded, setExpanded] = useState(false);
-
-  // Single tool: no group wrapper, no indent
-  if (steps.length === 1) {
-    return <ToolCallCard step={steps[0]!} isLast={true} nested={false} />;
-  }
-
-  const running = steps.filter((s) => s.status === "pending" || s.status === "approval").length;
-
-  return (
-    <div>
-      {/* Group header — no indent, aligned with text */}
-      <button
-        className="group inline-flex items-center gap-1 rounded px-1.5 leading-relaxed text-muted hover:bg-line/30 -ml-0.5"
-        onClick={() => setExpanded((v) => !v)}
-        type="button"
-      >
-        <span className="font-mono text-[11px] font-medium">[tools]</span>
-        <span className="text-[11px]">({steps.length})</span>
-        {running > 0 && (
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-        )}
-        <span className="text-[10px]">{expanded ? "▾" : "▸"}</span>
-      </button>
-
-      {/* Expanded children — indented with vertical lines */}
-      {expanded && (
-        <div>
-          {steps.map((step, i) => (
-            <ToolCallCard
-              key={step.id}
-              step={step}
-              isLast={i === steps.length - 1}
-              nested
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Render timeline with tool grouping                               */
-/* ------------------------------------------------------------------ */
-
-function renderTimeline(timeline: TimelineItem[]) {
-  const result: React.ReactNode[] = [];
-  let toolBuffer: ToolStep[] = [];
-
-  function flushTools() {
-    if (toolBuffer.length > 0) {
-      result.push(<ToolGroup key={toolBuffer[0]!.id} steps={[...toolBuffer]} />);
-      toolBuffer = [];
-    }
-  }
-
-  for (let i = 0; i < timeline.length; i++) {
-    const item = timeline[i]!;
-
-    if (item.kind === "user") {
-      flushTools();
-      result.push(
-        <div key={item.id} className="mb-6 ml-auto w-fit max-w-[85%]">
-          <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent-soft px-4 py-2.5 text-sm leading-relaxed text-text">
-            {item.content}
-          </div>
-        </div>
-      );
-      continue;
-    }
-
-    if (item.kind === "assistant") {
-      flushTools();
-      const nextIsTool = i + 1 < timeline.length && timeline[i + 1]!.kind === "tool";
-      result.push(
-        <div key={item.id} className={`max-w-[90%] ${nextIsTool ? "mb-0" : "mb-5"}`}>
-          <div className="text-sm leading-relaxed text-text">
-            <Markdown>{item.content}</Markdown>
-          </div>
-        </div>
-      );
-      continue;
-    }
-
-    // tool
-    toolBuffer.push(item.step);
-  }
-  flushTools();
-
-  return result;
-}
+import TimelineRenderer from "./TimelineRenderer";
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                         */
@@ -354,6 +31,7 @@ export default function ChatThread(props: ChatThreadProps) {
   const wasActiveRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Clear draft when turn completes
   useEffect(() => {
     if (wasActiveRef.current && !props.active && !props.error) {
       setDraft("");
@@ -361,11 +39,12 @@ export default function ChatThread(props: ChatThreadProps) {
     wasActiveRef.current = props.active;
   }, [props.active, props.error]);
 
+  // Clear user message on session change
   useEffect(() => {
     setCurrentUserMessage("");
   }, [props.sessionKey]);
 
-  // Clear currentUserMessage once it's been persisted to the session
+  // Clear currentUserMessage once persisted to the session
   useEffect(() => {
     if (currentUserMessage && props.messages.some(
       (m) => m.role === "user" && renderContent(m.content) === currentUserMessage
@@ -374,6 +53,7 @@ export default function ChatThread(props: ChatThreadProps) {
     }
   }, [props.messages, currentUserMessage]);
 
+  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -392,19 +72,19 @@ export default function ChatThread(props: ChatThreadProps) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* Messages area — scrolls full width, content centered inside */}
+      {/* Messages area */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[800px] px-5 py-6">
           {timeline.length === 0 && !props.active && (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
                 <div className="mb-3 text-3xl">🤖</div>
-                <p className="text-sm text-muted">Send a message to get started</p>
+                <p className="text-sm text-muted-foreground">Send a message to get started</p>
               </div>
             </div>
           )}
 
-          {renderTimeline(timeline)}
+          <TimelineRenderer timeline={timeline} />
 
           {props.error ? (
             <div className="rounded-lg bg-red/10 p-3 text-sm text-red">{props.error}</div>

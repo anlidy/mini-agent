@@ -31,7 +31,6 @@ export function useSessions(defaultKey = "default") {
   const [activeSession, setActiveSession] = useState<Session | undefined>();
   const [error, setError] = useState<string | undefined>();
   const mountedRef = useRef(true);
-  const initialActiveKeyRef = useRef(activeKey);
   const refreshRequestRef = useRef(0);
   const sessionRequestRef = useRef(0);
 
@@ -107,8 +106,7 @@ export function useSessions(defaultKey = "default") {
 
   useEffect(() => {
     void refresh();
-    void loadSession(initialActiveKeyRef.current);
-  }, [loadSession, refresh]);
+  }, [refresh]);
 
   return { sessions, activeKey, activeSession, error, refresh, loadSession, deleteSession };
 }

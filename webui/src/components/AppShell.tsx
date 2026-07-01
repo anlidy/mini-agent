@@ -29,6 +29,8 @@ export default function AppShell({
   onLeftWidthChange,
   onRightWidthChange
 }: AppShellProps) {
+  const hasFilesSidebar = filesSidebar != null;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-text">
       <ResizablePanel
@@ -45,15 +47,17 @@ export default function AppShell({
         {children}
       </main>
 
-      <ResizablePanel
-        collapsed={rightCollapsed}
-        onToggle={onToggleRight}
-        width={rightWidth}
-        onWidthChange={onRightWidthChange}
-        side="right"
-      >
-        {filesSidebar}
-      </ResizablePanel>
+      {hasFilesSidebar && (
+        <ResizablePanel
+          collapsed={rightCollapsed}
+          onToggle={onToggleRight}
+          width={rightWidth}
+          onWidthChange={onRightWidthChange}
+          side="right"
+        >
+          {filesSidebar}
+        </ResizablePanel>
+      )}
     </div>
   );
 }

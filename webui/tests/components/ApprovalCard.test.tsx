@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import ApprovalCard from "./ApprovalCard";
+import ApprovalCard from "@/components/ApprovalCard";
 
 describe("ApprovalCard", () => {
   it("sends approval decisions", async () => {

@@ -3,6 +3,8 @@ import { type FormEvent, useEffect, useState } from "react";
 
 import type { Config } from "../api/types";
 import { useConfig } from "../hooks/useConfig";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface SettingsViewProps {
   onClose(): void;
@@ -74,16 +76,17 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
       <div className="mb-5 flex items-start justify-between gap-4 border-b border-line pb-4">
         <div>
           <h1 className="m-0 text-lg font-bold text-ink">Settings</h1>
-          <p className="mt-1 text-sm text-muted">Provider, limits, search, exec, and available tools.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Provider, limits, search, exec, and available tools.</p>
         </div>
-        <button
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-ui border border-line bg-white text-text"
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Close settings"
           onClick={onClose}
           type="button"
-          aria-label="Close settings"
         >
           <X size={15} />
-        </button>
+        </Button>
       </div>
 
       {error || validationError ? (
@@ -92,117 +95,100 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
       {saved ? <div className="mb-4 rounded-ui bg-green/10 p-3 text-sm text-green">Saved.</div> : null}
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
-        <section className="rounded-ui bg-white p-4 shadow-[inset_0_0_0_1px_#e1e5e2]">
-          <h2 className="mb-3 text-sm font-bold text-ink">Provider</h2>
-          <div className="grid gap-3">
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Name
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-normal normal-case text-text"
-                value={draft.providerName}
-                onChange={(event) => setDraftField(setDraft, "providerName", event.target.value)}
-                placeholder="deepseek"
+        <Section title="Provider">
+          <Field label="Name">
+            <Input
+              value={draft.providerName}
+              onChange={(event) => setDraftField(setDraft, "providerName", event.target.value)}
+              placeholder="deepseek"
+            />
+          </Field>
+          <Field label="Base URL">
+            <Input
+              className="font-mono text-xs"
+              value={draft.baseUrl}
+              onChange={(event) => setDraftField(setDraft, "baseUrl", event.target.value)}
+              placeholder="https://api.deepseek.com/v1"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+            <Field label="Model">
+              <Input
+                value={draft.model}
+                onChange={(event) => setDraftField(setDraft, "model", event.target.value)}
+                placeholder="deepseek-chat"
               />
-            </label>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Base URL
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
-                value={draft.baseUrl}
-                onChange={(event) => setDraftField(setDraft, "baseUrl", event.target.value)}
-                placeholder="https://api.deepseek.com/v1"
+            </Field>
+            <Field label="Timeout">
+              <Input
+                className="font-mono text-xs"
+                value={draft.timeoutMs}
+                onChange={(event) => setDraftField(setDraft, "timeoutMs", event.target.value)}
+                placeholder="60000"
+                inputMode="numeric"
               />
-            </label>
-            <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-              <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-                Model
-                <input
-                  className="rounded-ui border border-line px-3 py-2 font-normal normal-case text-text"
-                  value={draft.model}
-                  onChange={(event) => setDraftField(setDraft, "model", event.target.value)}
-                  placeholder="deepseek-chat"
-                />
-              </label>
-              <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-                Timeout
-                <input
-                  className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
-                  value={draft.timeoutMs}
-                  onChange={(event) => setDraftField(setDraft, "timeoutMs", event.target.value)}
-                  placeholder="60000"
-                  inputMode="numeric"
-                />
-              </label>
-            </div>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              API key
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
-                value={draft.apiKey}
-                onChange={(event) => setDraftField(setDraft, "apiKey", event.target.value)}
-                placeholder="***"
-              />
-            </label>
+            </Field>
           </div>
-        </section>
+          <Field label="API key">
+            <Input
+              className="font-mono text-xs"
+              value={draft.apiKey}
+              onChange={(event) => setDraftField(setDraft, "apiKey", event.target.value)}
+              placeholder="***"
+            />
+          </Field>
+        </Section>
 
-        <section className="rounded-ui bg-white p-4 shadow-[inset_0_0_0_1px_#e1e5e2]">
-          <h2 className="mb-3 text-sm font-bold text-ink">Agent</h2>
+        <Section title="Agent">
           <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Iterations
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            <Field label="Iterations">
+              <Input
+                className="font-mono text-xs"
                 value={draft.maxIterations}
                 onChange={(event) => setDraftField(setDraft, "maxIterations", event.target.value)}
                 inputMode="numeric"
               />
-            </label>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Tool chars
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            </Field>
+            <Field label="Tool chars">
+              <Input
+                className="font-mono text-xs"
                 value={draft.maxToolResultChars}
                 onChange={(event) => setDraftField(setDraft, "maxToolResultChars", event.target.value)}
                 inputMode="numeric"
               />
-            </label>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Context
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            </Field>
+            <Field label="Context">
+              <Input
+                className="font-mono text-xs"
                 value={draft.contextWindowTokens}
                 onChange={(event) => setDraftField(setDraft, "contextWindowTokens", event.target.value)}
                 placeholder="auto"
                 inputMode="numeric"
               />
-            </label>
+            </Field>
           </div>
-        </section>
+        </Section>
 
-        <section className="rounded-ui bg-white p-4 shadow-[inset_0_0_0_1px_#e1e5e2]">
-          <h2 className="mb-3 text-sm font-bold text-ink">Tools</h2>
+        <Section title="Tools">
           <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Search
+            <Field label="Search">
               <select
-                className="rounded-ui border border-line bg-white px-3 py-2 font-normal normal-case text-text"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 value={draft.searchBackend}
                 onChange={(event) => setDraftField(setDraft, "searchBackend", event.target.value as SettingsDraft["searchBackend"])}
               >
                 <option value="none">none</option>
                 <option value="duckduckgo">duckduckgo</option>
               </select>
-            </label>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Search results
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            </Field>
+            <Field label="Search results">
+              <Input
+                className="font-mono text-xs"
                 value={draft.searchMaxResults}
                 onChange={(event) => setDraftField(setDraft, "searchMaxResults", event.target.value)}
                 inputMode="numeric"
               />
-            </label>
+            </Field>
           </div>
           <label className="mt-4 flex items-center gap-2 text-sm text-text">
             <input
@@ -213,71 +199,82 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
             Enable exec tool
           </label>
           <div className="mt-3 grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Exec timeout
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            <Field label="Exec timeout">
+              <Input
+                className="font-mono text-xs"
                 value={draft.execTimeoutMs}
                 onChange={(event) => setDraftField(setDraft, "execTimeoutMs", event.target.value)}
                 inputMode="numeric"
               />
-            </label>
-            <label className="grid gap-1.5 text-xs font-bold uppercase text-muted">
-              Exec output
-              <input
-                className="rounded-ui border border-line px-3 py-2 font-mono text-xs font-normal normal-case text-text"
+            </Field>
+            <Field label="Exec output">
+              <Input
+                className="font-mono text-xs"
                 value={draft.execMaxOutputChars}
                 onChange={(event) => setDraftField(setDraft, "execMaxOutputChars", event.target.value)}
                 inputMode="numeric"
               />
-            </label>
+            </Field>
           </div>
-        </section>
+        </Section>
 
-        <section className="rounded-ui bg-white p-4 shadow-[inset_0_0_0_1px_#e1e5e2]">
+        <Section title="Available tools">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold text-ink">Available tools</h2>
-            <button
-              className="grid h-7 w-7 place-items-center rounded-ui border border-line bg-white text-text"
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Refresh tools"
               onClick={() => void refresh()}
               type="button"
-              aria-label="Refresh tools"
             >
               <RefreshCw size={13} />
-            </button>
+            </Button>
           </div>
           <div className="flex flex-wrap gap-2">
             {tools.length > 0 ? (
               tools.map((tool) => (
-                <span key={tool.function.name} className="rounded-[7px] bg-[#f4f6f4] px-2 py-1 font-mono text-xs text-muted">
+                <span key={tool.function.name} className="rounded-[7px] bg-[#f4f6f4] px-2 py-1 font-mono text-xs text-muted-foreground">
                   {tool.function.name}
                 </span>
               ))
             ) : (
-              <span className="text-sm text-muted">No tools loaded.</span>
+              <span className="text-sm text-muted-foreground">No tools loaded.</span>
             )}
           </div>
-        </section>
+        </Section>
 
         <div className="sticky bottom-0 flex justify-end gap-2 border-t border-line bg-surface py-3">
-          <button
-            className="rounded-ui border border-line bg-white px-3 py-2 text-sm text-text"
-            onClick={onClose}
-            type="button"
-          >
+          <Button variant="outline" onClick={onClose} type="button">
             Close
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-ui bg-ink px-3 py-2 text-sm text-white disabled:opacity-60"
-            disabled={saving || !config}
-            type="submit"
-          >
+          </Button>
+          <Button disabled={saving || !config} type="submit">
             <Save size={14} />
             {saving ? "Saving" : "Save changes"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
+  );
+}
+
+/* ---- Helpers ---- */
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-ui bg-white p-4 shadow-[inset_0_0_0_1px_#e1e5e2]">
+      <h2 className="mb-3 text-sm font-bold text-ink">{title}</h2>
+      <div className="grid gap-3">{children}</div>
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1.5 text-xs font-bold uppercase text-muted-foreground">
+      {label}
+      {children}
+    </label>
   );
 }
 

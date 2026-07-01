@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Session, SessionSummary } from "../api/types";
-import { useSessions } from "./useSessions";
+import type { Session, SessionSummary } from "@/api/types";
+import { useSessions } from "@/hooks/useSessions";
 
 afterEach(() => {
   localStorage.clear();
@@ -62,6 +62,9 @@ describe("useSessions", () => {
     const { result } = renderHook(() => useSessions("default"));
 
     await waitFor(() => expect(result.current.sessions[0]?.key).toBe("default"));
+    await act(async () => {
+      await result.current.loadSession("default");
+    });
     await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/default", expect.objectContaining({ method: "GET" }));
   });
@@ -79,8 +82,12 @@ describe("useSessions", () => {
 
     const { result } = renderHook(() => useSessions("default"));
 
-    await waitFor(() => expect(result.current.activeSession?.key).toBe("other"));
+    // activeKey is initialised from localStorage, but session data requires explicit load.
     expect(result.current.activeKey).toBe("other");
+    await act(async () => {
+      await result.current.loadSession("other");
+    });
+    await waitFor(() => expect(result.current.activeSession?.key).toBe("other"));
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/other", expect.objectContaining({ method: "GET" }));
   });
 
@@ -94,6 +101,10 @@ describe("useSessions", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useSessions("default"));
+
+    await act(async () => {
+      await result.current.loadSession("default");
+    });
     await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
 
     await act(async () => {
@@ -169,6 +180,10 @@ describe("useSessions", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useSessions("default"));
+
+    await act(async () => {
+      await result.current.loadSession("default");
+    });
     await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
 
     await act(async () => {
