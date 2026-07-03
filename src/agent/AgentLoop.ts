@@ -33,6 +33,7 @@ export class AgentLoop implements Agent {
   private sessions?: SessionManager;
   private readonly sessionsDir?: string;
   private readonly defaultSessionKey?: string;
+  private readonly sessionSource?: string;
 
   constructor(options: AgentOptions = {}) {
     this.workspace = options.workspace ?? process.cwd();
@@ -45,6 +46,7 @@ export class AgentLoop implements Agent {
     this.sessionsDir = options.sessionsDir;
     this.sessions = options.sessions;
     this.defaultSessionKey = options.sessionKey;
+    this.sessionSource = options.sessionSource;
   }
 
   async run(input: string, options: RunOptions = {}): Promise<RunResult> {
@@ -129,7 +131,8 @@ export class AgentLoop implements Agent {
     if (!this.sessions) {
       this.sessions = new SessionManager({
         workspace: this.workspace,
-        sessionsDir: this.sessionsDir ?? configSessionsDir
+        sessionsDir: this.sessionsDir ?? configSessionsDir,
+        source: this.sessionSource
       });
     }
     return this.sessions;

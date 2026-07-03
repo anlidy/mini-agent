@@ -21,8 +21,13 @@ describe("SessionManager", () => {
     const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "project_default.jsonl");
     const lines = (await readFile(sessionPath, "utf8")).trim().split("\n");
 
-    expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ role: "user", content: "hello" });
+    expect(lines).toHaveLength(3);
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      _type: "metadata",
+      key: "project:default",
+      metadata: {}
+    });
+    expect(JSON.parse(lines[1] ?? "{}")).toMatchObject({ role: "user", content: "hello" });
 
     const resumed = await new SessionManager({ workspace }).getOrCreate("project:default");
     expect(resumed.messages).toEqual(session.messages);
@@ -84,5 +89,18 @@ describe("SessionManager", () => {
     expect(await manager.listSessions()).toEqual([]);
     const recreated = await manager.getOrCreate("delete-me");
     expect(recreated.messages).toEqual([]);
+  });
+
+  it("loads the canonical session key from metadata instead of deriving it from the filename", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-metadata-key-"));
+    const manager = new SessionManager({ workspace });
+    const session = await manager.getOrCreate("project:default");
+    session.messages.push({ role: "user", content: "hello", timestamp: "2026-06-04T00:00:00.000Z" });
+    await manager.save(session);
+
+    const summaries = await manager.listSessions();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.key).toBe("project:default");
   });
 });

@@ -53,7 +53,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     throw error;
   }
   // CLI-SETUP-MARKER
-  const sessionManager = new SessionManager({ workspace: config.workspace, sessionsDir: config.sessions.dir });
+  const sessionManager = new SessionManager({ workspace: config.workspace, sessionsDir: config.sessions.dir, source: "cli" });
   const session = await sessionManager.getOrCreate(args.session);
 
   await writeOutput(output, `mini-agent (${config.provider.name ?? "provider"}:${config.provider.model ?? "model"}) session=${args.session}\n`);
@@ -78,6 +78,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     workspace: config.workspace,
     sessionKey: args.session,
     sessionsDir: config.sessions.dir,
+    sessionSource: "cli",
     model: config.provider.model,
     tools: registry,
     provider: new OpenAIProvider({
@@ -305,5 +306,4 @@ function hasWritableNeedDrain(output: NodeJS.WritableStream): output is NodeJS.W
 function isTty(input: NodeJS.ReadableStream): boolean {
   return "isTTY" in input && input.isTTY === true;
 }
-
 

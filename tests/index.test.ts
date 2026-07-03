@@ -31,4 +31,9 @@ describe("package entrypoint", () => {
       usage: {}
     });
   });
+
+  it("does not expose one-off migration helpers from the public entrypoint", async () => {
+    const exports = await import("../src/index.js");
+    expect("migrateSessions" in exports).toBe(false);
+  });
 });

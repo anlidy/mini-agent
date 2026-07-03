@@ -88,7 +88,20 @@ describe("server REST API", () => {
     const handler = await setup(workspace);
     const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "demo.jsonl");
     await mkdir(path.dirname(sessionPath), { recursive: true });
-    await writeFile(sessionPath, `${JSON.stringify({ role: "user", content: "hello", timestamp: "2026-06-04T00:00:00.000Z" })}\n`, "utf8");
+    await writeFile(
+      sessionPath,
+      [
+        JSON.stringify({
+          _type: "metadata",
+          key: "demo",
+          created_at: "2026-06-04T00:00:00.000Z",
+          updated_at: "2026-06-04T00:00:00.000Z",
+          metadata: { source: "cli", title: "hello" }
+        }),
+        JSON.stringify({ role: "user", content: "hello", timestamp: "2026-06-04T00:00:00.000Z" })
+      ].join("\n") + "\n",
+      "utf8"
+    );
 
     const list = await call(handler, "GET", "/api/sessions");
     expect(list.json).toMatchObject([{ key: "demo", messageCount: 1, preview: "hello" }]);

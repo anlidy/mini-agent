@@ -105,6 +105,34 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
 }
 
 describe("server WebSocket API", () => {
+  it("creates bare UUID session keys for new websocket sessions", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-key-"));
+    const config = defaultConfig(workspace);
+    config.provider.apiKey = "test-key";
+    await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
+    await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    const state: ConfigState = {
+      config,
+      version: 0,
+      update(next: Config) {
+        this.config = next;
+        this.version += 1;
+      }
+    };
+    const socket = new FakeSocket();
+    bindAgentConnection(socket, new URL("http://localhost/ws"), {
+      workspace,
+      state,
+      providerFactory: () => new StreamingProvider(),
+      approvalTimeoutMs: 100
+    });
+
+    const session = await socket.next();
+    expect(session.type).toBe("session");
+    expect(session.type === "session" && session.key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(session.type === "session" && session.key.startsWith("session-")).toBe(false);
+  });
+
   it("binds a session and forwards streamed agent events", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-stream-"));
     const socket = await setup(workspace, new StreamingProvider());

@@ -7,10 +7,24 @@ export interface MessageRecord {
   timestamp: string;
 }
 
+export interface SessionMetadata {
+  source?: string;
+  title?: string;
+  [key: string]: unknown;
+}
+
+export interface SessionHeader {
+  _type: "metadata";
+  key: string;
+  created_at: string;
+  updated_at: string;
+  metadata: SessionMetadata;
+}
+
 export interface Session {
   key: string;
   messages: MessageRecord[];
   createdAt: string;
   updatedAt: string;
-  metadata: Record<string, unknown>;
+  metadata: SessionMetadata;
 }

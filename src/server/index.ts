@@ -95,7 +95,7 @@ export async function createRequestHandler(options: CreateServerOptions = {}): P
   const workspace = options.workspace ?? process.cwd();
   const staticDir = options.staticDir ?? defaultStaticDir();
   const state = createConfigState(await ensureDefaultConfig(workspace));
-  const sessions = new SessionManager({ workspace, sessionsDir: state.config.sessions.dir });
+  const sessions = new SessionManager({ workspace, sessionsDir: state.config.sessions.dir, source: "webui" });
   const router = new HttpRouter();
 
   registerSessionRoutes(router, sessions);

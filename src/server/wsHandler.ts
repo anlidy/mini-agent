@@ -68,7 +68,7 @@ export function handleWebSocketUpgrade(
 }
 
 export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocketHandlerOptions): void {
-  const sessionKey = url.searchParams.get("session") || `session-${randomUUID()}`;
+  const sessionKey = url.searchParams.get("session") || randomUUID();
   const approvals = new Map<string, PendingApproval>();
   let activeTurn: AbortController | undefined;
   let agentVersion = -1;
@@ -154,6 +154,7 @@ function buildAgent(
     workspace: options.workspace,
     sessionKey,
     sessionsDir: config.sessions.dir,
+    sessionSource: "webui",
     sessions: options.sessions,
     model: config.provider.model,
     tools: createDefaultToolRegistry({ search: config.search, exec: config.exec }),

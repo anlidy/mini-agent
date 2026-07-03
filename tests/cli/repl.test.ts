@@ -19,6 +19,13 @@ describe("CLI REPL", () => {
     await import("node:fs/promises").then((fs) => fs.mkdir(sessionDir, { recursive: true }));
     await writeFile(
       path.join(sessionDir, "demo.jsonl"),
+      JSON.stringify({
+        _type: "metadata",
+        key: "demo",
+        created_at: "2026-06-04T00:00:00.000Z",
+        updated_at: "2026-06-04T00:00:01.000Z",
+        metadata: { source: "cli", title: "old question" }
+      }) + "\n" +
       JSON.stringify({ role: "user", content: "old question", timestamp: "2026-06-04T00:00:00.000Z" }) + "\n" +
       JSON.stringify({ role: "assistant", content: "old answer", timestamp: "2026-06-04T00:00:01.000Z" }) + "\n"
     );
