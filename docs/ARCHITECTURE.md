@@ -76,7 +76,7 @@ REST routes:
 | `GET` | `/api/files/tree?path=` | read-only workspace-contained file tree |
 | `GET` | `/api/files/content?path=` | read-only workspace-contained file content |
 
-The WebSocket endpoint is `/ws?session=<key>`. Each connection owns one session view, one `AgentLoop`, and one per-connection `ToolRegistry`. Incoming `user_message` starts a streamed turn; `abort` cancels the in-flight turn; `approve_command` resolves a pending exec approval request. A second `user_message` while a turn is active returns `turn_rejected`.
+The WebSocket endpoint is `/ws?session=<key>`. The `session` query parameter is optional; when omitted, the server allocates a bare UUID key and announces it in the first `session` event. Each connection owns one session view, one `AgentLoop`, and one per-connection `ToolRegistry`. Incoming `user_message` starts a streamed turn; `abort` cancels the in-flight turn; `approve_command` resolves a pending exec approval request. A second `user_message` while a turn is active returns `turn_rejected`.
 
 Config is global per server instance. `PUT /api/config` writes `.mini-agent/config.json` atomically and bumps an in-memory version. Connections compare that version before the next turn and rebuild their `AgentLoop` when needed; active turns are not interrupted.
 
@@ -165,10 +165,14 @@ Workspace safety: `resolveWorkspacePath()` prevents path traversal with `..` che
 JSONL-based persistence with atomic writes:
 
 - Sessions stored as `.mini-agent/workspace/sessions/{key}.jsonl`
+- First JSONL line is a metadata header: canonical `key`, `created_at`, `updated_at`, and freeform `metadata`
+- Remaining JSONL lines are message records; invalid message lines are skipped on load
+- Filenames are sanitized, but `SessionManager` treats the header key as canonical
 - Atomic write via temp file + rename
+- New sessions default `metadata.source` from the driver (`cli` or `webui`) and derive `metadata.title` from the first user message preview
 - History trimming by message count and character budget
 - Drops leading tool messages so trimmed history never starts with an orphan tool result
-- Corrupted JSONL lines are silently skipped on load
+- Missing or invalid metadata headers fail the load instead of guessing legacy formats
 - Session listing returns `{ key, createdAt, updatedAt, messageCount, preview }[]`
 - Session deletion removes the JSONL file and clears the in-memory cache entry
 

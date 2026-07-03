@@ -39,7 +39,7 @@ Production Web UI builds emit to `dist/webui`; do not derive that static path fr
 
 The Web UI frontend (`webui/`) uses react-router v7 (3 routes: `/chat/:sessionId`,
 `/settings`), shadcn/ui v4 (`@base-ui/react` primitives), and Tailwind CSS.
-Tests live under `webui/tests/` (19 files, 114 cases). Large files were split:
+Tests live under `webui/tests/`. Large files were split:
 `ChatThread.tsx` delegates to `lib/timeline.ts` + `TimelineRenderer` + `ToolGroup`;
 `useAgentSocket.ts` delegates to `lib/segmentReducer.ts` for pure segment operations.
 
@@ -83,6 +83,7 @@ The CLI should:
 - print a clean `Config error:` message (not a stack trace) when config is invalid,
 - use the configured OpenAI-compatible provider,
 - save sessions to `.mini-agent/workspace/sessions/{key}.jsonl`,
+- write a metadata header as the first JSONL line before per-message records,
 - support `--resume` by printing previous user/assistant messages,
 - support `--stream` to print assistant tokens live,
 - continue conversations using previous session history,

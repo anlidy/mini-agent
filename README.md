@@ -12,7 +12,7 @@ A TypeScript AI agent — personal coding assistant with CLI, tool-calling, and 
 - **Tool System** — extensible tool registry with JSON Schema validation
 - **Built-in Tools** — read/write files, list directories, find files, grep, web fetch, web search, apply patch, opt-in exec
 - **Provider Abstraction** — OpenAI-compatible API, works with DeepSeek, OpenAI, and others
-- **Session Persistence** — JSONL-based session storage with history trimming
+- **Session Persistence** — JSONL-based session storage with metadata headers and history trimming
 - **Context Management** — pluggable token counting, context window budgeting, tool result summarization, `usage` reporting
 - **Config Validation** — zod-validated `.mini-agent/config.json` with clear errors and early API-key checks
 - **Skills Framework** — workspace-level skills with YAML frontmatter and auto-injection
@@ -95,7 +95,7 @@ node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
 
 The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It serves the React frontend build output from `dist/webui`; this path is independent of `--workspace`.
 
-Frontend stack: React 19 + TypeScript + Tailwind CSS 3 + Vite. Uses react-router v7 for client-side routing (`/chat/:sessionId`, `/settings`) and shadcn/ui v4 (`@base-ui/react` primitives) for UI components. Tests under `webui/tests/` (19 files, 114 cases). See `docs/specs/2026-06-30-webui-redesign.md` for the architecture redesign.
+Frontend stack: React 19 + TypeScript + Tailwind CSS 3 + Vite. Uses react-router v7 for client-side routing (`/chat/:sessionId`, `/settings`) and shadcn/ui v4 (`@base-ui/react` primitives) for UI components. Frontend tests live under `webui/tests/`. See `docs/specs/2026-06-30-webui-redesign.md` for the architecture redesign.
 
 Frontend development (all run from source, no build step for the backend):
 
@@ -136,7 +136,7 @@ WebSocket:
 ws://127.0.0.1:3210/ws?session=default
 ```
 
-Client messages are `user_message`, `abort`, and `approve_command`. Server messages include `session`, streamed agent events (`token`, `tool_call`, `tool_result`, `done`, `error`), `approve_request`, and `turn_rejected`. Only one turn can run at a time per connection.
+The `session` query parameter is optional. If omitted, the server generates a bare UUID key and returns it in the initial `session` message. Client messages are `user_message`, `abort`, and `approve_command`. Server messages include `session`, streamed agent events (`token`, `tool_call`, `tool_result`, `done`, `error`), `approve_request`, and `turn_rejected`. Only one turn can run at a time per connection.
 
 ## Verifying the runtime (Phase 2)
 
@@ -182,7 +182,19 @@ Sessions are stored as JSONL:
 .mini-agent/workspace/sessions/{key}.jsonl
 ```
 
-Session keys are sanitized for filenames. Each line is one message record — tool calls and results are saved so resumed conversations continue with full context.
+The on-disk filename is derived from a sanitized version of the session key, but
+the canonical key is stored in the file itself. The first line is a metadata
+record and the remaining lines are message records, for example:
+
+```json
+{"_type":"metadata","key":"707b8577-9ab2-498e-9122-d3f10941300d","created_at":"2026-05-28T15:47:30.279751Z","updated_at":"2026-05-28T15:49:10.205374Z","metadata":{"source":"webui","title":"My AI assistant intro"}}
+{"role":"user","content":"My AI assistant intro","timestamp":"2026-05-28T15:47:30.279751Z"}
+{"role":"assistant","content":"...","timestamp":"2026-05-28T15:49:10.205374Z"}
+```
+
+`metadata.source` is set by the caller (`cli` or `webui`), `metadata.title`
+defaults to the first user message preview, and tool calls/results are saved so
+resumed conversations continue with full context.
 
 ## Built-In Tools
 

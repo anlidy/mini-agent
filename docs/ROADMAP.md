@@ -121,7 +121,7 @@ native `http` server and a small WebSocket adapter, not Express.
   and `/settings` routes; `App.tsx` replaced by `RootLayout` + `ChatPage` +
   `SettingsPage`; settings accessible via sidebar gear icon (was orphaned)
 - [x] Test consolidation & refactoring (2026-06-30): tests unified under
-  `webui/tests/` (19 files, 114 cases), mirroring `src/` structure; `ChatThread.tsx`
+  `webui/tests/`, mirroring `src/` structure; `ChatThread.tsx`
   split into `lib/timeline.ts` + `TimelineRenderer` + `ToolGroup` (437→117 lines);
   `useAgentSocket.ts` split into `lib/segmentReducer.ts` (348→263 lines)
 - [x] Component library (2026-06-30): shadcn/ui v4 (`@base-ui/react` primitives —
