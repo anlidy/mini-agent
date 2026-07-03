@@ -13,9 +13,9 @@ export interface ConfigPatch {
   exec?: Partial<NonNullable<Config["exec"]>>;
 }
 
-export function defaultConfig(workspace = process.cwd()): Config {
+export function defaultConfig(configDir?: string): Config {
+  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
   return {
-    workspace,
     provider: {
       name: "deepseek",
       baseUrl: "https://api.deepseek.com/v1",
@@ -28,7 +28,7 @@ export function defaultConfig(workspace = process.cwd()): Config {
       contextWindowTokens: 32_000
     },
     sessions: {
-      dir: path.join(workspace, ".mini-agent", "workspace", "sessions"),
+      dir: path.join(cdir, "workspace", "sessions"),
       defaultKey: "default",
       maxHistoryMessages: 50,
       maxHistoryChars: 200_000
@@ -36,28 +36,29 @@ export function defaultConfig(workspace = process.cwd()): Config {
   };
 }
 
-export async function ensureDefaultConfig(workspace = process.cwd()): Promise<Config> {
-  const configPath = configFilePath(workspace);
+export async function ensureDefaultConfig(configDir?: string): Promise<Config> {
+  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const configPath = configFilePath(cdir);
   try {
-    return await loadConfig(workspace);
+    return await loadConfig(cdir);
   } catch (error) {
     if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
       throw error;
     }
   }
 
-  const config = defaultConfig(workspace);
+  const config = defaultConfig(cdir);
   await mkdir(path.dirname(configPath), { recursive: true });
   await writeFile(configPath, `${JSON.stringify(config, omitUndefined, 2)}\n`, "utf8");
   return config;
 }
 
-export async function loadConfig(workspace = process.cwd()): Promise<Config> {
-  const raw = await readFile(configFilePath(workspace), "utf8");
+export async function loadConfig(configDir?: string): Promise<Config> {
+  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const raw = await readFile(configFilePath(cdir), "utf8");
   const parsed = JSON.parse(raw) as Partial<Config>;
-  const defaults = defaultConfig(workspace);
+  const defaults = defaultConfig(cdir);
   const merged: Config = {
-    workspace: parsed.workspace ?? workspace,
     provider: {
       ...defaults.provider,
       ...parsed.provider
@@ -73,11 +74,12 @@ export async function loadConfig(workspace = process.cwd()): Promise<Config> {
     ...(parsed.search ? { search: parsed.search } : {}),
     ...(parsed.exec ? { exec: parsed.exec } : {})
   };
-  return parseConfig(merged, workspace);
+  return parseConfig(merged, cdir);
 }
 
-export async function writeConfig(patch: ConfigPatch, workspace = process.cwd()): Promise<Config> {
-  const current = await ensureDefaultConfig(workspace);
+export async function writeConfig(patch: ConfigPatch, configDir?: string): Promise<Config> {
+  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const current = await ensureDefaultConfig(cdir);
   const merged: Config = {
     ...current,
     provider: {
@@ -112,8 +114,8 @@ export async function writeConfig(patch: ConfigPatch, workspace = process.cwd())
     merged.provider.apiKey = current.provider.apiKey;
   }
 
-  const validated = parseConfig(merged, workspace);
-  const file = configFilePath(workspace);
+  const validated = parseConfig(merged, cdir);
+  const file = configFilePath(cdir);
   const temp = `${file}.${process.pid}.tmp`;
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(temp, `${JSON.stringify(validated, omitUndefined, 2)}\n`, "utf8");
@@ -121,8 +123,9 @@ export async function writeConfig(patch: ConfigPatch, workspace = process.cwd())
   return validated;
 }
 
-export function configFilePath(workspace = process.cwd()): string {
-  return path.join(workspace, ".mini-agent", "config.json");
+export function configFilePath(configDir?: string): string {
+  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  return path.join(cdir, "config.json");
 }
 
 function omitUndefined(_key: string, value: unknown): unknown {

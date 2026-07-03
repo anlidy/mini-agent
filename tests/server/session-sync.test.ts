@@ -75,7 +75,7 @@ class FakeSocket implements AgentSocket {
 }
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
-  const config = defaultConfig(workspace);
+  const config = defaultConfig(path.join(workspace, ".mini-agent"));
   config.provider.apiKey = "secret-key";
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
   await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");

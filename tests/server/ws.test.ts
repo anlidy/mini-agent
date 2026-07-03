@@ -81,7 +81,7 @@ class FakeSocket implements AgentSocket {
 }
 
 async function setup(workspace: string, provider: LLMProvider): Promise<FakeSocket> {
-  const config = defaultConfig(workspace);
+  const config = defaultConfig(path.join(workspace, ".mini-agent"));
   config.provider.apiKey = "test-key";
   config.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
@@ -89,6 +89,7 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
   const state: ConfigState = {
     config,
     version: 0,
+    workspace,
     update(next: Config) {
       this.config = next;
       this.version += 1;
@@ -107,13 +108,14 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
 describe("server WebSocket API", () => {
   it("creates bare UUID session keys for new websocket sessions", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-key-"));
-    const config = defaultConfig(workspace);
+    const config = defaultConfig(path.join(workspace, ".mini-agent"));
     config.provider.apiKey = "test-key";
     await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
     await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
     const state: ConfigState = {
       config,
       version: 0,
+      workspace,
       update(next: Config) {
         this.config = next;
         this.version += 1;

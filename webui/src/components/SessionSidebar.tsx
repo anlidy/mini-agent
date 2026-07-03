@@ -11,8 +11,7 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  FolderPlus,
-  LogOut,
+  FolderOpen,
 } from "lucide-react";
 
 import type { SessionSummary } from "../api/types";
@@ -31,6 +30,7 @@ interface SessionSidebarProps {
   activeKey: string;
   onSelect(key: string): void;
   onNew(): void;
+  onNewInProject(workspace: string): void;
   onToggleCollapse(): void;
   onDelete(key: string): Promise<void>;
   onRename(key: string, name: string): void;
@@ -38,10 +38,6 @@ interface SessionSidebarProps {
   projects: Project[];
   projectMap: Map<string, string[]>;
   orphans: string[];
-  onCreateProject(name: string): Project;
-  onDeleteProject(projectId: string): void;
-  onAddToProject(projectId: string, sessionKey: string): void;
-  onRemoveFromProject(projectId: string, sessionKey: string): void;
   collapsed?: boolean;
 }
 
@@ -50,6 +46,7 @@ export default function SessionSidebar({
   activeKey,
   onSelect,
   onNew,
+  onNewInProject,
   onToggleCollapse,
   onDelete,
   onRename,
@@ -57,10 +54,6 @@ export default function SessionSidebar({
   projects,
   projectMap,
   orphans,
-  onCreateProject,
-  onDeleteProject,
-  onAddToProject,
-  onRemoveFromProject,
   collapsed = false,
 }: SessionSidebarProps) {
   const navigate = useNavigate();
@@ -125,12 +118,6 @@ export default function SessionSidebar({
   const cancelRename = () => {
     setRenaming(null);
     setRenameValue("");
-  };
-
-  const handleNewInProject = (projectId: string) => {
-    const newKey = crypto.randomUUID();
-    onAddToProject(projectId, newKey);
-    onSelect(newKey);
   };
 
   /* ── Collapsed: icon-only strip ─────────────────────────────── */
@@ -289,43 +276,12 @@ export default function SessionSidebar({
                       variant="ghost"
                       size="icon-xs"
                       aria-label={`New session in ${project.name}`}
-                      onClick={(e) => { e.stopPropagation(); handleNewInProject(project.id); }}
+                      onClick={(e) => { e.stopPropagation(); onNewInProject(project.id); }}
                       type="button"
                       className="shrink-0 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:text-ink"
                     >
                       <Plus size={13} />
                     </Button>
-                    <Popover>
-                      <PopoverTrigger
-                        aria-label="Project menu"
-                        className="shrink-0 rounded-md p-0.5 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:bg-muted hover:text-ink"
-                        onClick={(e) => e.stopPropagation()}
-                        render={(props) => (
-                          <button {...props} type="button">
-                            <MoreHorizontal size={12} />
-                          </button>
-                        )}
-                      />
-                      <PopoverContent align="start" sideOffset={4}>
-                        <PopoverItem
-                          onClick={() => {
-                            const newKey = crypto.randomUUID();
-                            onAddToProject(project.id, newKey);
-                            onSelect(newKey);
-                          }}
-                        >
-                          <Plus size={13} />
-                          New session
-                        </PopoverItem>
-                        <PopoverItem
-                          onClick={() => onDeleteProject(project.id)}
-                          className="text-red hover:bg-red/10"
-                        >
-                          <Trash2 size={13} />
-                          Delete project
-                        </PopoverItem>
-                      </PopoverContent>
-                    </Popover>
                   </div>
 
                   {isExpanded && (
@@ -340,7 +296,6 @@ export default function SessionSidebar({
                             key={key}
                             sessionKey={key}
                             displayName={getDisplayName(key)}
-
                             isActive={key === activeKey}
                             isRenaming={renaming === key}
                             renameValue={renameValue}
@@ -350,10 +305,7 @@ export default function SessionSidebar({
                             onRenameSubmit={submitRename}
                             onRenameCancel={cancelRename}
                             onDelete={onDelete}
-                            projects={projects}
                             currentProjectId={project.id}
-                            onAddToProject={onAddToProject}
-                            onRemoveFromProject={onRemoveFromProject}
                           />
                         ))
                       )}
@@ -387,10 +339,7 @@ export default function SessionSidebar({
                   setRenameValue("");
                 }}
                 onDelete={onDelete}
-                projects={projects}
                 currentProjectId={null}
-                onAddToProject={onAddToProject}
-                onRemoveFromProject={onRemoveFromProject}
               />
             ))}
           </div>
@@ -428,10 +377,7 @@ interface SessionItemProps {
   onRenameSubmit(key: string): void;
   onRenameCancel(): void;
   onDelete(key: string): Promise<void>;
-  projects: Project[];
   currentProjectId: string | null;
-  onAddToProject(projectId: string, sessionKey: string): void;
-  onRemoveFromProject(projectId: string, sessionKey: string): void;
 }
 
 function SessionItem({
@@ -446,10 +392,7 @@ function SessionItem({
   onRenameSubmit,
   onRenameCancel,
   onDelete,
-  projects,
   currentProjectId,
-  onAddToProject,
-  onRemoveFromProject,
 }: SessionItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -474,18 +417,6 @@ function SessionItem({
     popoverActionsRef.current?.close();
     onRename(sessionKey);
   };
-
-  const handleRemoveFromProject = () => {
-    popoverActionsRef.current?.close();
-    if (currentProjectId) {
-      onRemoveFromProject(currentProjectId, sessionKey);
-    }
-  };
-
-  const otherProjects = useMemo(
-    () => projects.filter((p) => p.id !== currentProjectId),
-    [projects, currentProjectId]
-  );
 
   return (
     <div
@@ -557,42 +488,6 @@ function SessionItem({
               <Pencil size={13} />
               Rename
             </PopoverItem>
-            {otherProjects.length > 0 && (
-              <PopoverItem>
-                <FolderPlus size={13} />
-                <span>Add to project</span>
-                <div className="ml-auto flex gap-1">
-                  {otherProjects.slice(0, 3).map((p) => (
-                    <button
-                      key={p.id}
-                      className="rounded-md px-1.5 py-0.5 text-[11px] transition-colors duration-fast hover:bg-muted hover:text-ink"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        popoverActionsRef.current?.close();
-                        onAddToProject(p.id, sessionKey);
-                      }}
-                      type="button"
-                      title={p.name}
-                    >
-                      {p.name.length > 8
-                        ? p.name.slice(0, 8) + "…"
-                        : p.name}
-                    </button>
-                  ))}
-                  {otherProjects.length > 3 && (
-                    <span className="text-[11px] text-ink-muted">
-                      +{otherProjects.length - 3}
-                    </span>
-                  )}
-                </div>
-              </PopoverItem>
-            )}
-            {currentProjectId && (
-              <PopoverItem onClick={handleRemoveFromProject}>
-                <LogOut size={13} />
-                Remove from project
-              </PopoverItem>
-            )}
             <div className="my-1 border-t border-line/20" />
             <PopoverItem
               onClick={handleDelete}

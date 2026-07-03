@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { ContextBuilder } from "./ContextBuilder.js";
 import { AgentRunner, type AgentRunSpec, type AgentRunResult } from "./AgentRunner.js";
 import { ensureDefaultConfig } from "../config/loadConfig.js";
@@ -23,7 +25,8 @@ interface PreparedRun {
 }
 
 export class AgentLoop implements Agent {
-  readonly workspace: string;
+  /** Config directory (.mini-agent) — used for config loading and fallback workspace. */
+  readonly configDir: string;
   readonly model?: string;
   readonly maxIterations?: number;
   private readonly maxToolResultChars?: number;
@@ -36,7 +39,7 @@ export class AgentLoop implements Agent {
   private readonly sessionSource?: string;
 
   constructor(options: AgentOptions = {}) {
-    this.workspace = options.workspace ?? process.cwd();
+    this.configDir = options.workspace ?? path.join(process.cwd(), ".mini-agent");
     this.model = options.model;
     this.maxIterations = options.maxIterations;
     this.maxToolResultChars = options.maxToolResultChars;
@@ -72,10 +75,15 @@ export class AgentLoop implements Agent {
 
   /** Build session, provider, context, and the runner spec shared by run/stream. */
   private async prepare(input: string, options: RunOptions): Promise<PreparedRun> {
-    const config = await ensureDefaultConfig(this.workspace);
+    const config = await ensureDefaultConfig(this.configDir);
     const sessionKey = options.sessionKey ?? this.defaultSessionKey ?? config.sessions.defaultKey;
     const sessions = this.sessionManager(config.sessions.dir);
     const session = await sessions.getOrCreate(sessionKey);
+    // Per-session workspace from metadata; falls back to configDir.
+    const rawWorkspace = (typeof session.metadata.workspace === "string" && session.metadata.workspace)
+      ? session.metadata.workspace
+      : this.configDir;
+    const sessionWorkspace = path.resolve(path.resolve(this.configDir), rawWorkspace);
     const model = this.model ?? config.provider.model ?? "deepseek-chat";
     const provider = this.provider ?? new OpenAIProvider({
       apiKey: this.resolveApiKey(config.provider.apiKey),
@@ -83,8 +91,8 @@ export class AgentLoop implements Agent {
       model,
       timeoutMs: config.provider.timeoutMs
     });
-    const context = new ContextBuilder({ workspace: this.workspace });
-    const skills = new SkillsLoader(this.workspace);
+    const context = new ContextBuilder({ workspace: sessionWorkspace });
+    const skills = new SkillsLoader(sessionWorkspace);
     const initialMessages = await context.buildMessages({
       input,
       sessionKey,
@@ -100,7 +108,7 @@ export class AgentLoop implements Agent {
       model,
       maxIterations: this.maxIterations ?? config.agent.maxIterations,
       maxToolResultChars: this.maxToolResultChars ?? config.agent.maxToolResultChars,
-      workspace: this.workspace,
+      workspace: sessionWorkspace,
       contextWindowTokens: config.agent.contextWindowTokens,
       approveCommand: options.approveCommand ?? this.approveCommand,
       signal: options.signal
@@ -130,7 +138,6 @@ export class AgentLoop implements Agent {
   private sessionManager(configSessionsDir: string): SessionManager {
     if (!this.sessions) {
       this.sessions = new SessionManager({
-        workspace: this.workspace,
         sessionsDir: this.sessionsDir ?? configSessionsDir,
         source: this.sessionSource
       });

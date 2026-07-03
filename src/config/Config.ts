@@ -1,5 +1,4 @@
 export interface Config {
-  workspace: string;
   provider: {
     name?: string;
     apiKey?: string;

@@ -107,7 +107,7 @@ describe("CLI REPL", () => {
     const command = `/tool apply_patch ${JSON.stringify({ patch })}\n/exit\n`;
     const text = await runRepl(workspace, command);
     expect(text).toContain("created.txt");
-    await expect(readFile(path.join(workspace, "created.txt"), "utf8")).resolves.toBe("made by /tool\n");
+    await expect(readFile(path.join(workspace, ".mini-agent", "created.txt"), "utf8")).resolves.toBe("made by /tool\n");
   });
 
   it("reports invalid JSON args for /tool", async () => {

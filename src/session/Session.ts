@@ -10,6 +10,7 @@ export interface MessageRecord {
 export interface SessionMetadata {
   source?: string;
   title?: string;
+  workspace?: string;
   [key: string]: unknown;
 }
 

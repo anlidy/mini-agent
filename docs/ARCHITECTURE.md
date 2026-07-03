@@ -69,7 +69,7 @@ REST routes:
 |---|---|---|
 | `GET` | `/api/sessions` | `SessionManager.listSessions()` |
 | `GET` | `/api/sessions/:key` | `SessionManager.getOrCreate()` |
-| `PATCH` | `/api/sessions/:key` | Update session title (404 if missing) |
+| `PATCH` | `/api/sessions/:key` | Update session title and/or workspace (404 if missing) |
 | `DELETE` | `/api/sessions/:key` | `SessionManager.deleteSession()` |
 | `GET` | `/api/config` | redacted in-memory config |
 | `PUT` | `/api/config` | `writeConfig()` + in-memory version bump |
@@ -165,16 +165,17 @@ Workspace safety: `resolveWorkspacePath()` prevents path traversal with `..` che
 
 JSONL-based persistence with atomic writes:
 
-- Sessions stored as `.mini-agent/workspace/sessions/{key}.jsonl`
+- Sessions stored as `<configDir>/workspace/sessions/{key}.jsonl`
 - First JSONL line is a metadata header: canonical `key`, `created_at`, `updated_at`, and freeform `metadata`
+- `metadata.workspace` stores the per-conversation working directory (default = configDir). When set, it overrides the default for tool execution. The Web UI derives sidebar projects from this field.
+- `metadata.title` is auto-derived from the first user message; can be updated via `PATCH /api/sessions/:key`
 - Remaining JSONL lines are message records; invalid message lines are skipped on load
 - Filenames are sanitized, but `SessionManager` treats the header key as canonical
 - Atomic write via temp file + rename
-- New sessions default `metadata.source` from the driver (`cli` or `webui`) and derive `metadata.title` from the first user message preview
+- New sessions default `metadata.source` from the driver (`cli` or `webui`)
 - History trimming by message count and character budget
 - Drops leading tool messages so trimmed history never starts with an orphan tool result
-- Missing or invalid metadata headers fail the load instead of guessing legacy formats
-- Session listing returns `{ key, createdAt, updatedAt, messageCount, title }[]`
+- Session listing returns `{ key, createdAt, updatedAt, messageCount, title, workspace? }[]`
 - `SessionManager.get(key)` returns `Session | undefined` without auto-creating; `getOrCreate(key)` still creates on miss
 - Session deletion removes the JSONL file and clears the in-memory cache entry
 
@@ -204,15 +205,15 @@ Discovers skills from `workspace/skills/{name}/SKILL.md`:
 
 ### Config (`src/config/`)
 
-Loads, merges, and validates configuration:
+Loads, merges, and validates configuration. All functions take `configDir` (the `.mini-agent` directory itself, default `<cwd>/.mini-agent`):
 
-- `defaultConfig()` — hardcoded defaults (the source of concrete values like the provider name and base URL)
-- `loadConfig()` — reads `.mini-agent/config.json`, deep-merges over the defaults, then validates the result against a zod schema (`src/config/schema.ts`), reporting all issues with dotted paths and rejecting unknown keys
-- `ensureDefaultConfig()` — auto-creates the config file on first run
-- `writeConfig()` — writes validated provider/agent/search/exec config patches atomically and preserves stored API keys when a UI round-trip sends `***`
-- Optional `search` and `exec` blocks configure the web search backend and the opt-in exec tool
+- `defaultConfig(configDir)` — hardcoded defaults; sessions.dir = `<configDir>/workspace/sessions`
+- `loadConfig(configDir)` — reads `<configDir>/config.json`, deep-merges over defaults, validates against zod schema
+- `ensureDefaultConfig(configDir)` — auto-creates the config file on first run
+- `writeConfig(patch, configDir)` — writes validated provider/agent/search/exec config patches atomically, preserves stored API keys when a UI round-trip sends `***`
+- `configFilePath(configDir)` — returns `<configDir>/config.json`
 
-A missing API key is surfaced early by `AgentLoop` (from config or `MINI_AGENT_API_KEY`) instead of failing at the first request. Token accounting uses a pluggable `TokenCounter` (`src/agent/tokens.ts`); real provider `usage` flows through `RunResult`.
+The `configDir` is resolved to an absolute path at startup. The `--workspace` CLI/server option names the project root; configDir is `<projectRoot>/.mini-agent`.
 
 ### Hooks (`src/agent/hooks.ts`)
 

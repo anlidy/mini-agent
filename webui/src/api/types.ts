@@ -4,6 +4,7 @@ export interface SessionSummary {
   updatedAt: string;
   messageCount: number;
   title: string;
+  workspace?: string;
 }
 
 export interface MessageRecord {
@@ -37,7 +38,6 @@ export interface FileContent {
 }
 
 export interface Config {
-  workspace: string;
   provider: {
     name?: string;
     apiKey?: string;

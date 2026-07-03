@@ -13,7 +13,7 @@ import { createRequestHandler, type MiniAgentRequestHandler } from "../../src/se
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
-  const config = defaultConfig(workspace);
+  const config = defaultConfig(path.join(workspace, ".mini-agent"));
   config.provider.apiKey = "secret-key";
   config.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });

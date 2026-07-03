@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import ResizablePanel from "./ResizablePanel";
 
 interface AppShellProps {
-  workspacePath?: string;
   sessionSidebar: ReactNode;
   filesSidebar: ReactNode;
   children: ReactNode;

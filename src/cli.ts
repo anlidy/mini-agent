@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -41,9 +42,10 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const output = options.output ?? stdout;
   const args = parseCliArgs(options.argv ?? process.argv.slice(2));
 
+  const configDir = path.join(path.resolve(args.workspace), ".mini-agent");
   let config;
   try {
-    config = await ensureDefaultConfig(args.workspace);
+    config = await ensureDefaultConfig(configDir);
   } catch (error) {
     if (error instanceof ConfigValidationError) {
       await writeOutput(output, `Config error: ${error.message}\nFix .mini-agent/config.json and retry.\n`);
@@ -53,7 +55,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     throw error;
   }
   // CLI-SETUP-MARKER
-  const sessionManager = new SessionManager({ workspace: config.workspace, sessionsDir: config.sessions.dir, source: "cli" });
+  const sessionManager = new SessionManager({ sessionsDir: config.sessions.dir, source: "cli" });
   const session = await sessionManager.getOrCreate(args.session);
 
   await writeOutput(output, `mini-agent (${config.provider.name ?? "provider"}:${config.provider.model ?? "model"}) session=${args.session}\n`);
@@ -75,7 +77,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   // .mini-agent/config.json every turn, so editing the file takes effect on the
   // next message without restarting the REPL.
   const agent = new AgentLoop({
-    workspace: config.workspace,
+    workspace: configDir,
     sessionKey: args.session,
     sessionsDir: config.sessions.dir,
     sessionSource: "cli",
@@ -92,7 +94,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const ctx: ReplContext = {
     agent,
     registry,
-    workspace: config.workspace,
+    workspace: configDir,
     sessionKey: args.session,
     output,
     stream: args.stream

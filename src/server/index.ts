@@ -34,7 +34,8 @@ export interface MiniAgentServer {
 
 export async function createServer(options: CreateServerOptions = {}): Promise<MiniAgentServer> {
   const handler = await createRequestHandler(options);
-  const workspace = options.workspace ?? process.cwd();
+  const projectRoot = path.resolve(options.workspace ?? process.cwd());
+  const configDir = path.join(projectRoot, ".mini-agent");
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 3210;
   const server = createHttpServer(handler.handle);
@@ -42,7 +43,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
 
   server.on("upgrade", (req, socket, head) => {
     const handled = handleWebSocketUpgrade(req, socket, head, wss, {
-      workspace,
+      workspace: configDir,
       state: handler.state,
       sessions: handler.sessions,
       providerFactory: options.providerFactory,
@@ -92,16 +93,17 @@ export interface MiniAgentRequestHandler {
 }
 
 export async function createRequestHandler(options: CreateServerOptions = {}): Promise<MiniAgentRequestHandler> {
-  const workspace = options.workspace ?? process.cwd();
+  const projectRoot = path.resolve(options.workspace ?? process.cwd());
+  const configDir = path.join(projectRoot, ".mini-agent");
   const staticDir = options.staticDir ?? defaultStaticDir();
-  const state = createConfigState(await ensureDefaultConfig(workspace));
-  const sessions = new SessionManager({ workspace, sessionsDir: state.config.sessions.dir, source: "webui" });
+  const state = createConfigState(await ensureDefaultConfig(configDir), configDir);
+  const sessions = new SessionManager({ sessionsDir: state.config.sessions.dir, source: "webui" });
   const router = new HttpRouter();
 
   registerSessionRoutes(router, sessions);
   registerConfigRoutes(router, state);
   registerToolRoutes(router, state);
-  registerFileRoutes(router, workspace);
+  registerFileRoutes(router, projectRoot);
 
   return {
     state,
@@ -128,10 +130,11 @@ function defaultStaticDir(): string {
     : path.resolve(moduleDir, "..", "webui");
 }
 
-function createConfigState(initial: Config): ConfigState {
+function createConfigState(initial: Config, workspace: string): ConfigState {
   return {
     config: initial,
     version: 0,
+    workspace,
     update(config: Config) {
       this.config = config;
       this.version += 1;

@@ -55,29 +55,24 @@ const execSchema = z
   })
   .strict();
 
-function configSchema(workspace: string) {
+function configSchema(configDir: string) {
   return z
     .object({
-      workspace: z.string().default(workspace),
       provider: providerSchema.prefault({}),
       agent: agentSchema.prefault({}),
-      sessions: sessionsSchema.prefault({ dir: defaultSessionsDir(workspace) }),
+      sessions: sessionsSchema.prefault({ dir: `${configDir}/workspace/sessions` }),
       search: searchSchema.optional(),
       exec: execSchema.optional()
     })
     .strict();
 }
 
-function defaultSessionsDir(workspace: string): string {
-  return `${workspace}/.mini-agent/workspace/sessions`;
-}
-
 /**
  * Validate and normalize a raw config object, applying defaults for any omitted
  * fields. Throws {@link ConfigValidationError} with all issues on failure.
  */
-export function parseConfig(raw: unknown, workspace: string): Config {
-  const result = configSchema(workspace).safeParse(raw ?? {});
+export function parseConfig(raw: unknown, configDir: string): Config {
+  const result = configSchema(configDir).safeParse(raw ?? {});
   if (!result.success) {
     throw new ConfigValidationError(
       `Invalid .mini-agent/config.json:\n${formatIssues(result.error.issues)}`,

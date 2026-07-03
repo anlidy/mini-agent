@@ -9,7 +9,7 @@ import { ensureDefaultConfig, loadConfig } from "../../src/config/loadConfig.js"
 describe("config loading", () => {
   it("creates and loads default DeepSeek config without writing an API key", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-config-"));
-    const config = await ensureDefaultConfig(workspace);
+    const config = await ensureDefaultConfig(path.join(workspace, ".mini-agent"));
 
     expect(config.provider).toMatchObject({
       name: "deepseek",
@@ -22,6 +22,6 @@ describe("config loading", () => {
     const raw = await readFile(configPath, "utf8");
     expect(raw).toContain("deepseek-chat");
     expect(raw).not.toContain("apiKey");
-    await expect(loadConfig(workspace)).resolves.toEqual(config);
+    await expect(loadConfig(path.join(workspace, ".mini-agent"))).resolves.toEqual(config);
   });
 });

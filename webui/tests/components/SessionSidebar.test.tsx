@@ -43,10 +43,7 @@ const defaultProps = {
   projects: [] as Project[],
   projectMap: new Map<string, string[]>(),
   orphans: [] as string[],
-  onCreateProject: vi.fn(),
-  onDeleteProject: vi.fn(),
-  onAddToProject: vi.fn(),
-  onRemoveFromProject: vi.fn(),
+  onNewInProject: vi.fn(),
 };
 
 /* ------------------------------------------------------------------ */
@@ -203,7 +200,6 @@ describe("SessionSidebar", () => {
       id: "proj-1",
       name: "My Project",
       sessionKeys: ["session-a"],
-      createdAt: new Date().toISOString(),
     };
     const projectMap = new Map<string, string[]>([["proj-1", ["session-a"]]]);
     const sessions = [sessionSummary("session-a")];

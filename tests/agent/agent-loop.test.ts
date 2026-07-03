@@ -59,7 +59,7 @@ describe("AgentLoop", () => {
       response({ content: "README says project readme" }),
       response({ content: "I remember the README." })
     ]);
-    const agent = new AgentLoop({ workspace, provider, sessionKey: "demo" });
+    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, sessionKey: "demo" });
 
     const first = await agent.run("read README.md");
     expect(first.content).toBe("README says project readme");
@@ -74,9 +74,9 @@ describe("AgentLoop", () => {
       .toBe(true);
   });
 
-  it("uses provider settings from .mini-agent/config.json when no provider is injected", async () => {
+  it("uses provider settings from config.jsonconfig.json when no provider is injected", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-config-"));
-    const config = defaultConfig(workspace);
+    const config = defaultConfig(path.join(workspace, ".mini-agent"));
     config.provider.apiKey = "config-file-key";
     config.sessions.dir = path.join(workspace, ".mini-agent", "custom-sessions");
     await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
@@ -89,7 +89,7 @@ describe("AgentLoop", () => {
       return response({ content: "configured" });
     });
 
-    const agent = new AgentLoop({ workspace });
+    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
     const result = await agent.run("hello");
 
     expect(result.content).toBe("configured");
@@ -103,7 +103,7 @@ describe("AgentLoop", () => {
     const previous = process.env.MINI_AGENT_API_KEY;
     delete process.env.MINI_AGENT_API_KEY;
     try {
-      const agent = new AgentLoop({ workspace });
+      const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
       await expect(agent.run("hello")).rejects.toThrow(/Missing provider API key/);
     } finally {
       if (previous !== undefined) {
@@ -122,7 +122,7 @@ describe("AgentLoop", () => {
       return response({ content: "ok" });
     });
     try {
-      const agent = new AgentLoop({ workspace });
+      const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
       const result = await agent.run("hello");
       expect(result.content).toBe("ok");
       expect(apiKeys).toEqual(["env-key"]);
@@ -148,7 +148,7 @@ describe("AgentLoop", () => {
         yield { type: "done", response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: {} } };
       }
     };
-    const agent = new AgentLoop({ workspace, provider, sessionKey: "stream" });
+    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, sessionKey: "stream" });
 
     const events: AgentEvent[] = [];
     for await (const event of agent.stream("hi")) {
@@ -173,7 +173,7 @@ describe("AgentLoop", () => {
     await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
     const configPath = path.join(workspace, ".mini-agent", "config.json");
     const writeMaxIterations = async (maxIterations: number): Promise<void> => {
-      const config = defaultConfig(workspace);
+      const config = defaultConfig(path.join(workspace, ".mini-agent"));
       config.provider.apiKey = "k";
       config.agent.maxIterations = maxIterations;
       await writeFile(configPath, `${JSON.stringify(config)}\n`, "utf8");
@@ -195,7 +195,7 @@ describe("AgentLoop", () => {
     };
 
     // No maxIterations in the constructor -> prepare() must read it from config.
-    const agent = new AgentLoop({ workspace, provider, tools: new ToolRegistry(), sessionKey: "iter" });
+    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, tools: new ToolRegistry(), sessionKey: "iter" });
 
     await writeMaxIterations(2);
     const first = await agent.run("go");

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { parseConfig, formatConfigError, ConfigValidationError } from "../../src/config/schema.js";
@@ -6,14 +7,13 @@ import { defaultConfig } from "../../src/config/loadConfig.js";
 describe("config schema validation", () => {
   it("accepts the generated default config", () => {
     const workspace = "/tmp/ws";
-    const parsed = parseConfig(defaultConfig(workspace), workspace);
+    const parsed = parseConfig(defaultConfig(path.join(workspace, ".mini-agent")), workspace);
     expect(parsed.provider.model).toBe("deepseek-chat");
     expect(parsed.agent.maxIterations).toBe(100);
   });
 
   it("fills defaults for omitted optional sections", () => {
     const parsed = parseConfig({ provider: { apiKey: "sk-test" } }, "/tmp/ws");
-    expect(parsed.workspace).toBe("/tmp/ws");
     expect(parsed.provider.apiKey).toBe("sk-test");
     expect(parsed.agent.maxIterations).toBeGreaterThan(0);
     expect(parsed.sessions.defaultKey).toBe("default");

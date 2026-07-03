@@ -4,7 +4,6 @@ import path from "node:path";
 import type { MessageRecord, Session, SessionHeader, SessionMetadata } from "./Session.js";
 
 export interface SessionManagerOptions {
-  workspace: string;
   sessionsDir?: string;
   source?: string;
 }
@@ -20,6 +19,7 @@ export interface SessionSummary {
   updatedAt: string;
   messageCount: number;
   title: string;
+  workspace?: string;
 }
 
 interface ParsedSessionFile {
@@ -32,9 +32,8 @@ export class SessionManager {
   readonly sessionsDir: string;
   private readonly source: string;
 
-  constructor(options?: Partial<SessionManagerOptions>) {
-    const workspace = options?.workspace ?? process.cwd();
-    this.sessionsDir = options?.sessionsDir ?? path.join(workspace, ".mini-agent", "workspace", "sessions");
+  constructor(options?: SessionManagerOptions) {
+    this.sessionsDir = options?.sessionsDir ?? path.join(process.cwd(), ".mini-agent", "workspace", "sessions");
     this.source = options?.source ?? "unknown";
   }
 
@@ -112,7 +111,8 @@ export class SessionManager {
           createdAt: parsed.header.created_at,
           updatedAt: parsed.header.updated_at,
           messageCount: parsed.messages.length,
-          title: typeof parsed.header.metadata.title === "string" ? parsed.header.metadata.title : titleFromMessages(parsed.messages)
+          title: typeof parsed.header.metadata.title === "string" ? parsed.header.metadata.title : titleFromMessages(parsed.messages),
+          workspace: typeof parsed.header.metadata.workspace === "string" ? parsed.header.metadata.workspace : undefined
         };
       }));
 

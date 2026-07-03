@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import AppShell from "../components/AppShell";
@@ -72,27 +72,55 @@ export default function RootLayout() {
     handleSessionSelect(sessionKey);
   }, [handleSessionSelect]);
 
+  // Create a new session in a specific project (workspace)
+  const handleNewInProject = useCallback(
+    async (workspace: string) => {
+      const sessionKey = crypto.randomUUID();
+      // Pre-set workspace via PATCH before navigating
+      try {
+        // Trigger session creation via GET, then set workspace
+        await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}`);
+        await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ workspace }),
+        });
+      } catch {
+        // Ignore — session will be created on first load anyway
+      }
+      handleSessionSelect(sessionKey);
+    },
+    [handleSessionSelect]
+  );
+
+  // Derive configDir from sessions.dir: <configDir>/workspace/sessions → configDir
+  const defaultWorkspace = useMemo(() => {
+    const dir = config.config?.sessions?.dir;
+    if (dir && dir.endsWith("/workspace/sessions")) {
+      return dir.slice(0, -"/workspace/sessions".length);
+    }
+    return dir ?? "";
+  }, [config.config?.sessions?.dir]);
+
+  const grouped = projects.getGrouped(sessions.sessions, defaultWorkspace);
+
   return (
     <>
       <AppShell
-        workspacePath={config.config?.workspace}
         sessionSidebar={
           <SessionSidebar
             sessions={sessions.sessions}
             activeKey={activeKey}
             onSelect={handleSessionSelect}
             onNew={handleNewSession}
+            onNewInProject={handleNewInProject}
             onToggleCollapse={toggleLeft}
             onDelete={sessions.deleteSession}
             onRename={sessions.setDisplayName}
             getDisplayName={sessions.getDisplayName}
-            projects={projects.projects}
-            projectMap={projects.getGrouped(sessions.sessions.map(s => s.key)).projectMap}
-            orphans={projects.getGrouped(sessions.sessions.map(s => s.key)).orphans}
-            onCreateProject={projects.createProject}
-            onDeleteProject={projects.deleteProject}
-            onAddToProject={projects.addSessionToProject}
-            onRemoveFromProject={projects.removeSessionFromProject}
+            projects={grouped.projects}
+            projectMap={grouped.projectMap}
+            orphans={grouped.orphans}
             collapsed={leftCollapsed}
           />
         }
@@ -102,7 +130,6 @@ export default function RootLayout() {
               tree={files.tree}
               selectedPath={files.selected?.path}
               selectedContent={files.selected?.content}
-              workspacePath={config.config?.workspace}
               error={files.error}
               onSelect={files.selectFile}
               onRefresh={files.refreshTree}
@@ -130,6 +157,7 @@ export default function RootLayout() {
             lastChatKey: lastChatKeyRef.current,
             toggleRight,
             isRightCollapsed: rightCollapsed,
+            defaultWorkspace,
           }}
         />
       </AppShell>

@@ -22,7 +22,7 @@ interface ChatThreadProps {
   active: boolean;
   aborting: boolean;
   error?: string;
-  onSend(text: string): boolean;
+  onSend(text: string): boolean | Promise<boolean>;
   onApprove(approved: boolean): void;
   onAbort(): void;
   onToggleRight?(): void;
@@ -89,8 +89,8 @@ export default function ChatThread(props: ChatThreadProps) {
       onModelChange={props.onModelChange}
       workspacePath={props.workspacePath}
       onWorkspaceChange={props.onWorkspaceChange}
-      onSend={(text) => {
-        const accepted = props.onSend(text);
+      onSend={async (text) => {
+        const accepted = await props.onSend(text);
         if (accepted) {
           setDraft("");
           setCurrentUserMessage(text);

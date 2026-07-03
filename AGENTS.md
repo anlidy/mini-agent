@@ -62,13 +62,18 @@ All UI changes must follow DESIGN.md — warm-paper aesthetic, restrained amber 
 
 ## Runtime Data
 
-Local runtime data lives under:
+Local runtime data lives under the configDir (default `<cwd>/.mini-agent`):
 
 ```text
 .mini-agent/
+├── config.json
+└── workspace/
+    └── sessions/
 ```
 
 This directory is git-ignored. Do not commit local config, API keys, or session JSONL files.
+
+Each session may carry a `metadata.workspace` (per-conversation working directory). When unset or equal to configDir, the session is an "orphan" (no project). When set to a different path, the sidebar groups it into a project named after that path's last segment. The default workspace in the Composer is configDir.
 
 Never hard-code or expose API keys, tokens, credentials, local provider secrets, or real config values in git-committable source, tests, docs, fixtures, generated defaults, or examples. Use placeholders, omitted fields, environment variables, or `.mini-agent/config.json` values that remain local and git-ignored.
 
@@ -84,10 +89,11 @@ Never hard-code or expose API keys, tokens, credentials, local provider secrets,
 
 The CLI should:
 
-- create `.mini-agent/config.json` on first run,
+- derive configDir as `<--workspace>/.mini-agent` (default `<cwd>/.mini-agent`),
+- create `configDir/config.json` on first run,
 - print a clean `Config error:` message (not a stack trace) when config is invalid,
 - use the configured OpenAI-compatible provider,
-- save sessions to `.mini-agent/workspace/sessions/{key}.jsonl`,
+- save sessions to `configDir/workspace/sessions/{key}.jsonl`,
 - write a metadata header as the first JSONL line before per-message records,
 - support `--resume` by printing previous user/assistant messages,
 - support `--stream` to print assistant tokens live,
@@ -100,9 +106,11 @@ The CLI should:
 The local server should:
 
 - bind to `127.0.0.1` by default,
+- use `--workspace` as project root; configDir = `<workspace>/.mini-agent`,
 - expose REST routes under `/api` with JSON `{ error }` failures,
 - redact `provider.apiKey` from `GET /api/config`,
 - preserve the real API key when `PUT /api/config` receives `***`,
+- support `workspace` in `PATCH /api/sessions/:key` for per-conversation workspace,
 - keep file tree/content APIs workspace-scoped and read-only,
 - use one active turn per WebSocket connection and reject overlaps with `turn_rejected`,
 - bridge `exec` approvals through the same WebSocket connection,
