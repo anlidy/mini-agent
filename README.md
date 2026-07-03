@@ -95,7 +95,7 @@ node dist/server.js --workspace /path/to/project --host 127.0.0.1 --port 3210
 
 The server binds to `127.0.0.1` by default and exposes a thin browser-facing driver over the existing `AgentLoop`. It serves the React frontend build output from `dist/webui`; this path is independent of `--workspace`.
 
-Frontend stack: React 19 + TypeScript + Tailwind CSS 3 + Vite. Uses react-router v7 for client-side routing (`/chat/:sessionId`, `/settings`) and shadcn/ui v4 (`@base-ui/react` primitives) for UI components. Frontend tests live under `webui/tests/`. See `docs/specs/2026-06-30-webui-redesign.md` for the architecture redesign.
+Frontend stack: React 19 + TypeScript + Tailwind CSS 3 + Vite. Uses react-router v7 for client-side routing (`/chat/:sessionId`, `/settings`) and shadcn/ui v4 (`@base-ui/react` primitives) for UI components. Frontend tests live under `webui/tests/`. See `DESIGN.md` for the visual design system (warm-paper aesthetic, amber accent, OKLCH tokens).
 
 Frontend development (all run from source, no build step for the backend):
 

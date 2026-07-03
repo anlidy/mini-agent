@@ -128,8 +128,13 @@ native `http` server and a small WebSocket adapter, not Express.
   Button, Input, Textarea, Select, Dialog); CSS variables mapped to existing
   design tokens; migrated Composer, ApprovalCard, ResizablePanel, SessionSidebar,
   FilesSidebar, SettingsView
+- [x] Visual redesign (2026-07-03): warm-paper aesthetic with OKLCH color system,
+  restrained amber accent (≤10%), Geist typeface, barely-there borders, sidebar
+  collapse animation, icon-only collapsed sidebar state. Design tokens live in
+  `webui/src/styles.css` and `webui/tailwind.config.ts`; authority in `DESIGN.md`
+  and `PRODUCT.md`. 19 test files, 116 cases.
 - [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
-- [ ] Dark/light theme
+- [ ] Dark mode (light mode complete with full design tokens; dark deferred)
 - [ ] Token usage and performance panel
 
 ## Phase 4 — Architecture Depth

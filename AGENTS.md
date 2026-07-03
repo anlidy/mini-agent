@@ -38,10 +38,15 @@ Production Web UI builds emit to `dist/webui`; do not derive that static path fr
 `--workspace`, which is the user project root.
 
 The Web UI frontend (`webui/`) uses react-router v7 (3 routes: `/chat/:sessionId`,
-`/settings`), shadcn/ui v4 (`@base-ui/react` primitives), and Tailwind CSS.
-Tests live under `webui/tests/`. Large files were split:
+`/settings`), shadcn/ui v4 (`@base-ui/react` primitives), and Tailwind CSS 3 with
+OKLCH design tokens. Tests live under `webui/tests/`. Large files were split:
 `ChatThread.tsx` delegates to `lib/timeline.ts` + `TimelineRenderer` + `ToolGroup`;
 `useAgentSocket.ts` delegates to `lib/segmentReducer.ts` for pure segment operations.
+
+Design authority lives in `DESIGN.md` (visual system: colors, typography, motion,
+component patterns) and `PRODUCT.md` (strategy: register, brand, principles).
+All UI changes must follow DESIGN.md — warm-paper aesthetic, restrained amber accent
+(≤10%), Geist typeface, barely-there borders, paper backgrounds.
 
 ## Architecture Boundaries
 
@@ -132,3 +137,5 @@ mechanisms, data flow, and design rationale, see:
 |---|---|
 | `docs/ARCHITECTURE.md` | Full architecture: module map, data flow, design principles, subsystem responsibilities |
 | `docs/ROADMAP.md` | Phase progress, completed features, pending work |
+| `DESIGN.md` | Visual system: OKLCH color tokens, typography, motion, component patterns, layout |
+| `PRODUCT.md` | Strategy: register, users, brand personality, anti-references, design principles |
