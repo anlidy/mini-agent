@@ -6,69 +6,79 @@ export default {
     extend: {
       colors: {
         // Existing design tokens
-        background: "#f6f7f5",
-        foreground: "#30353b",
+        background: "#ffffff",
+        foreground: "#242424",
         surface: "#ffffff",
-        ink: "#17191d",
-        text: "#30353b",
+        ink: "#1f1f1f",
+        text: "#242424",
 
         // muted: DEFAULT is the background (for shadcn hover), foreground is the text
         muted: {
-          DEFAULT: "#f4f6f4",
-          foreground: "#6f7781"
+          DEFAULT: "#f3f3f3",
+          foreground: "#8d8d8d"
         },
 
-        line: "#e1e5e2",
+        line: "#ececec",
 
         // accent: DEFAULT is brand blue, soft is light blue bg
         accent: {
-          DEFAULT: "#315fbd",
-          foreground: "#315fbd",
-          soft: "#edf3ff"
+          DEFAULT: "#8fc4ff",
+          foreground: "#1f64b8",
+          soft: "#eff7ff"
         },
 
         "approval-soft": "#fff6df",
-        green: "#2d7a58",
+        green: "#008767",
         red: "#b42318",
-        sidebar: "#fafbfa",
-        connector: "#d0d7de",
-        "tool-bg": "#f8f9fb",
+        sidebar: "#fafafa",
+        connector: "#dddddd",
+        "tool-bg": "#f7f7f7",
 
         // shadcn/ui required tokens
         card: "#ffffff",
-        "card-foreground": "#30353b",
+        "card-foreground": "#242424",
         popover: "#ffffff",
-        "popover-foreground": "#30353b",
+        "popover-foreground": "#242424",
         primary: {
-          DEFAULT: "#315fbd",
+          DEFAULT: "#8a8d91",
           foreground: "#ffffff"
         },
         secondary: {
-          DEFAULT: "#f4f6f4",
-          foreground: "#17191d"
+          DEFAULT: "#f5f5f5",
+          foreground: "#242424"
         },
         destructive: {
           DEFAULT: "#b42318",
           foreground: "#ffffff"
         },
-        border: "#e1e5e2",
-        input: "#e1e5e2",
-        ring: "#315fbd",
+        border: "#ececec",
+        input: "#ececec",
+        ring: "#8fc4ff",
 
         // Sidebar tokens
-        "sidebar-background": "#fafbfa",
-        "sidebar-foreground": "#30353b",
-        "sidebar-primary": "#315fbd",
+        "sidebar-background": "#fafafa",
+        "sidebar-foreground": "#2f2f2f",
+        "sidebar-primary": "#1f64b8",
         "sidebar-primary-foreground": "#ffffff",
-        "sidebar-accent": "#f4f6f4",
-        "sidebar-accent-foreground": "#30353b",
-        "sidebar-border": "#e1e5e2",
-        "sidebar-ring": "#315fbd"
+        "sidebar-accent": "#f1f1f1",
+        "sidebar-accent-foreground": "#242424",
+        "sidebar-border": "#ececec",
+        "sidebar-ring": "#8fc4ff"
       },
       borderRadius: {
         ui: "8px"
       },
       fontFamily: {
+        sans: [
+          "HarmonyOS Sans SC",
+          "MiSans",
+          "PingFang SC",
+          "Microsoft YaHei",
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif"
+        ],
         mono: ["SFMono-Regular", "Cascadia Code", "Roboto Mono", "Consolas", "monospace"]
       }
     }

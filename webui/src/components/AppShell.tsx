@@ -47,7 +47,7 @@ export default function AppShell({
         {children}
       </main>
 
-      {hasFilesSidebar && (
+      {hasFilesSidebar && !rightCollapsed && (
         <ResizablePanel
           collapsed={rightCollapsed}
           onToggle={onToggleRight}

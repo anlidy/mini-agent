@@ -4,6 +4,27 @@ import { apiDelete, apiGet } from "../api/http";
 import type { Session, SessionSummary } from "../api/types";
 
 const ACTIVE_SESSION_STORAGE_KEY = "mini-agent.activeSessionKey";
+const DISPLAY_NAMES_STORAGE_KEY = "mini-agent.displayNames";
+
+function readDisplayNames(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DISPLAY_NAMES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || Array.isArray(parsed) || !parsed) return {};
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function writeDisplayNames(names: Record<string, string>): void {
+  try {
+    localStorage.setItem(DISPLAY_NAMES_STORAGE_KEY, JSON.stringify(names));
+  } catch {
+    // Ignore storage failures
+  }
+}
 
 function formatError(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -30,9 +51,26 @@ export function useSessions(defaultKey = "default") {
   const [activeKey, setActiveKey] = useState(() => readStoredActiveKey(defaultKey));
   const [activeSession, setActiveSession] = useState<Session | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>(readDisplayNames);
   const mountedRef = useRef(true);
   const refreshRequestRef = useRef(0);
   const sessionRequestRef = useRef(0);
+
+  const getDisplayName = useCallback(
+    (key: string): string => displayNames[key] || key,
+    [displayNames]
+  );
+
+  const setDisplayName = useCallback((key: string, name: string): void => {
+    const next = { ...readDisplayNames() };
+    if (name.trim()) {
+      next[key] = name.trim();
+    } else {
+      delete next[key];
+    }
+    writeDisplayNames(next);
+    setDisplayNames(next);
+  }, []);
 
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequestRef.current;
@@ -108,5 +146,5 @@ export function useSessions(defaultKey = "default") {
     void refresh();
   }, [refresh]);
 
-  return { sessions, activeKey, activeSession, error, refresh, loadSession, deleteSession };
+  return { sessions, activeKey, activeSession, error, refresh, loadSession, deleteSession, getDisplayName, setDisplayName };
 }

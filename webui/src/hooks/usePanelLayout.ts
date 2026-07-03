@@ -36,7 +36,7 @@ const RIGHT_KEY = "mini-agent.rightPanelWidth";
 
 export function usePanelLayout(defaultLeft = 260, defaultRight = 300) {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(true);
   const [leftWidth, setLeftWidthState] = useState(() => readStoredWidth(LEFT_KEY, defaultLeft));
   const [rightWidth, setRightWidthState] = useState(() => readStoredWidth(RIGHT_KEY, defaultRight));
 

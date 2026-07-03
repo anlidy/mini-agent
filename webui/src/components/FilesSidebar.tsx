@@ -24,25 +24,14 @@ export default function FilesSidebar({
   workspacePath,
   error,
   onSelect,
-  onRefresh,
-  onToggleCollapse
+  onRefresh
 }: FilesSidebarProps) {
   const [tab, setTab] = useState<Tab>("files");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Tab bar + collapse */}
+      {/* Tab bar */}
       <div className="flex shrink-0 items-center border-b border-line">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 text-muted-foreground hover:text-text"
-          onClick={onToggleCollapse}
-          type="button"
-          aria-label="Collapse panel"
-        >
-          <ChevronRight size={15} />
-        </Button>
         <button
           className={`flex-1 py-2 text-center text-[13px] font-medium transition-colors ${
             tab === "files"
@@ -142,7 +131,6 @@ function ChangesTab() {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-4">
       <div className="text-center">
-        <div className="mb-2 text-2xl">📋</div>
         <p className="text-[13px] text-muted-foreground">Changes will appear here</p>
         <p className="mt-1 text-[12px] text-[#9aa2aa]">
           Diff view for workspace modifications is coming soon.

@@ -10,10 +10,10 @@ describe("Composer", () => {
     const { rerender } = render(<Composer disabled={false} value="" onChange={vi.fn()} onSend={onSend} />);
 
     rerender(<Composer disabled={false} value="  hello  " onChange={vi.fn()} onSend={onSend} />);
-    await userEvent.type(screen.getByPlaceholderText(/Ask mini-agent/), "{enter}");
+    await userEvent.type(screen.getByPlaceholderText(/问任何问题/), "{enter}");
 
     expect(onSend).toHaveBeenCalledWith("hello");
-    expect(screen.getByPlaceholderText(/Ask mini-agent/)).toHaveValue("  hello  ");
+    expect(screen.getByPlaceholderText(/问任何问题/)).toHaveValue("  hello  ");
   });
 
   it("keeps newlines on Shift+Enter", async () => {
@@ -21,7 +21,7 @@ describe("Composer", () => {
     const onChange = vi.fn();
     render(<Composer disabled={false} value="" onChange={onChange} onSend={onSend} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/Ask mini-agent/), "hello{shift>}{enter}{/shift}world");
+    await userEvent.type(screen.getByPlaceholderText(/问任何问题/), "hello{shift>}{enter}{/shift}world");
 
     expect(onSend).not.toHaveBeenCalled();
     expect(onChange).toHaveBeenCalled();
@@ -31,7 +31,7 @@ describe("Composer", () => {
     const onSend = vi.fn();
     render(<Composer disabled={true} value="hello" onChange={vi.fn()} onSend={onSend} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/Ask mini-agent/), "hello{enter}");
+    await userEvent.type(screen.getByPlaceholderText(/问任何问题/), "hello{enter}");
 
     expect(onSend).not.toHaveBeenCalled();
   });

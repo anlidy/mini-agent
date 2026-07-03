@@ -8,6 +8,7 @@ import { useAgentSocket } from "../hooks/useAgentSocket";
 import { useConfig } from "../hooks/useConfig";
 import { useFiles } from "../hooks/useFiles";
 import { usePanelLayout } from "../hooks/usePanelLayout";
+import { useProjects } from "../hooks/useProjects";
 import { useSessions } from "../hooks/useSessions";
 
 export default function RootLayout() {
@@ -17,6 +18,7 @@ export default function RootLayout() {
 
   const activeKey = sessionId ?? "default";
   const sessions = useSessions("default");
+  const projects = useProjects();
   const config = useConfig();
   const files = useFiles();
   const {
@@ -64,55 +66,73 @@ export default function RootLayout() {
     [navigate]
   );
 
+  // Create a new session immediately and navigate to it
   const handleNewSession = useCallback(() => {
-    handleSessionSelect(`session-${crypto.randomUUID()}`);
+    const sessionKey = `session-${crypto.randomUUID()}`;
+    handleSessionSelect(sessionKey);
   }, [handleSessionSelect]);
 
   return (
-    <AppShell
-      workspacePath={config.config?.workspace}
-      sessionSidebar={
-        <SessionSidebar
-          sessions={sessions.sessions}
-          activeKey={activeKey}
-          onSelect={handleSessionSelect}
-          onNew={handleNewSession}
-          onToggleCollapse={toggleLeft}
-        />
-      }
-      filesSidebar={
-        isChatPage ? (
-          <FilesSidebar
-            tree={files.tree}
-            selectedPath={files.selected?.path}
-            selectedContent={files.selected?.content}
-            workspacePath={config.config?.workspace}
-            error={files.error}
-            onSelect={files.selectFile}
-            onRefresh={files.refreshTree}
-            onToggleCollapse={toggleRight}
+    <>
+      <AppShell
+        workspacePath={config.config?.workspace}
+        sessionSidebar={
+          <SessionSidebar
+            sessions={sessions.sessions}
+            activeKey={activeKey}
+            onSelect={handleSessionSelect}
+            onNew={handleNewSession}
+            onToggleCollapse={toggleLeft}
+            onDelete={sessions.deleteSession}
+            onRename={sessions.setDisplayName}
+            getDisplayName={sessions.getDisplayName}
+            projects={projects.projects}
+            projectMap={projects.getGrouped(sessions.sessions.map(s => s.key)).projectMap}
+            orphans={projects.getGrouped(sessions.sessions.map(s => s.key)).orphans}
+            onCreateProject={projects.createProject}
+            onDeleteProject={projects.deleteProject}
+            onAddToProject={projects.addSessionToProject}
+            onRemoveFromProject={projects.removeSessionFromProject}
           />
-        ) : null
-      }
-      leftCollapsed={leftCollapsed}
-      rightCollapsed={rightCollapsed || !isChatPage}
-      leftWidth={leftWidth}
-      rightWidth={rightWidth}
-      onToggleLeft={toggleLeft}
-      onToggleRight={toggleRight}
-      onLeftWidthChange={setLeftWidth}
-      onRightWidthChange={setRightWidth}
-    >
-      <Outlet
-        context={{
-          sessions,
-          config,
-          files,
-          socket,
-          activeKey,
-          lastChatKey: lastChatKeyRef.current
-        }}
-      />
-    </AppShell>
+        }
+        filesSidebar={
+          isChatPage ? (
+            <FilesSidebar
+              tree={files.tree}
+              selectedPath={files.selected?.path}
+              selectedContent={files.selected?.content}
+              workspacePath={config.config?.workspace}
+              error={files.error}
+              onSelect={files.selectFile}
+              onRefresh={files.refreshTree}
+              onToggleCollapse={toggleRight}
+            />
+          ) : null
+        }
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed || !isChatPage}
+        leftWidth={leftWidth}
+        rightWidth={rightWidth}
+        onToggleLeft={toggleLeft}
+        onToggleRight={toggleRight}
+        onLeftWidthChange={setLeftWidth}
+        onRightWidthChange={setRightWidth}
+      >
+        <Outlet
+          context={{
+            sessions,
+            config,
+            files,
+            socket,
+            projects,
+            activeKey,
+            lastChatKey: lastChatKeyRef.current,
+            toggleRight,
+            isRightCollapsed: rightCollapsed,
+          }}
+        />
+      </AppShell>
+
+    </>
   );
 }

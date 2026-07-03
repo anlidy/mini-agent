@@ -73,7 +73,7 @@ describe("ChatThread", () => {
       />
     );
 
-    await userEvent.type(screen.getByPlaceholderText(/Ask mini-agent/), "inspect this file");
+    await userEvent.type(screen.getByPlaceholderText(/问任何问题/), "inspect this file");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     // The submitted user message should appear in the chat area (also in textarea)

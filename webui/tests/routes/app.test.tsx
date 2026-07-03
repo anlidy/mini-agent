@@ -95,12 +95,11 @@ describe("App (with router)", () => {
 
     render(<RouterProvider router={createTestRouter()} />);
 
-    // Sidebar tabs: "Files" and "Changes" tabs are present
-    expect(await screen.findByText("Files")).toBeInTheDocument();
-    expect(screen.getByText("Changes")).toBeInTheDocument();
-    // New session and settings icon buttons are present
-    expect(screen.getByRole("button", { name: "New session" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    // New conversation and settings buttons are present
+    expect(await screen.findByRole("button", { name: "新建对话" })).toBeInTheDocument();
+    expect(screen.getByText("设置")).toBeInTheDocument();
+    // Right panel expand button is present (sidebar collapsed by default)
+    expect(screen.getByRole("button", { name: "Open files panel" })).toBeInTheDocument();
   });
 
   it("refreshes the active session after a completed turn so history appears", async () => {
@@ -155,7 +154,7 @@ describe("App (with router)", () => {
 
     render(<RouterProvider router={createTestRouter()} />);
 
-    await screen.findByText("Files");
+    await screen.findByRole("button", { name: "新建对话" });
     FakeWebSocket.instances[0]?.emit("message", {
       data: JSON.stringify({
         type: "done",
@@ -268,11 +267,11 @@ describe("App (with router)", () => {
 
     render(<RouterProvider router={createTestRouter()} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await userEvent.click(await screen.findByRole("button", { name: "设置" }));
 
     // Settings page should be visible
     expect(await screen.findByText("Provider")).toBeInTheDocument();
-    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getAllByText("Agent").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Tools")).toBeInTheDocument();
   });
 });
