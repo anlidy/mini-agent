@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
 
 interface ResizablePanelProps {
@@ -12,6 +11,8 @@ interface ResizablePanelProps {
   side: "left" | "right";
   children: React.ReactNode;
 }
+
+const COLLAPSED_W = 48;
 
 export default function ResizablePanel({
   collapsed,
@@ -62,38 +63,29 @@ export default function ResizablePanel({
     };
   }, [maxWidth, minWidth, onWidthChange, side]);
 
-  // Collapsed: thin bar with a chevron pointing toward the content
-  if (collapsed) {
-    return (
-      <div className="flex shrink-0 flex-col items-center border-line bg-sidebar pt-3" style={{ width: 32 }}>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Expand ${side} panel`}
-          onClick={onToggle}
-          type="button"
-        >
-          {side === "left" ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
-        </Button>
-      </div>
-    );
-  }
-
   const borderClass = side === "left" ? "border-r" : "border-l";
+  const w = collapsed ? COLLAPSED_W : width;
 
   return (
-    <div className={`relative flex shrink-0 flex-col overflow-hidden border-line bg-sidebar ${borderClass}`} style={{ width }}>
+    <div
+      className={`relative flex shrink-0 flex-col overflow-hidden border-line/20 bg-sidebar ${borderClass} transition-[width] duration-300 ease-expo`}
+      style={{ width: w }}
+    >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {children}
       </div>
-      {/* Drag handle */}
-      <div
-        className={`absolute top-0 h-full w-1 cursor-col-resize hover:bg-accent/20 active:bg-accent/30 ${
-          side === "left" ? "-right-0.5" : "-left-0.5"
-        }`}
-        style={{ zIndex: 10 }}
-        onMouseDown={onMouseDown}
-      />
+      {/* Drag handle — invisible until hover, hidden when collapsed */}
+      {!collapsed && (
+        <div
+          className={`absolute top-0 h-full w-[3px] cursor-col-resize transition-colors duration-fast hover:bg-accent/30 active:bg-accent/50 ${
+            side === "left" ? "-right-px" : "-left-px"
+          }`}
+          style={{ zIndex: 10 }}
+          onMouseDown={onMouseDown}
+        />
+      )}
     </div>
   );
 }
+
+export { COLLAPSED_W };

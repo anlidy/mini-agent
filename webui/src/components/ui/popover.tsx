@@ -57,8 +57,9 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "z-50 min-w-[160px] rounded-lg bg-popover p-1 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 outline-none",
-            "origin-[var(--transform-origin)] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+            "z-50 min-w-[160px] rounded-xl bg-surface p-1.5 text-sm text-ink shadow-lg ring-1 ring-line/25 outline-none",
+            "origin-[var(--transform-origin)]",
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
             className
           )}
@@ -80,9 +81,9 @@ function PopoverItem({
     <button
       data-slot="popover-item"
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
-        "hover:bg-muted hover:text-foreground",
-        "focus-visible:bg-muted focus-visible:outline-none",
+        "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed transition-colors duration-fast",
+        "text-ink-secondary hover:bg-muted hover:text-ink",
+        "focus-visible:bg-muted focus-visible:text-ink focus-visible:outline-none",
         className
       )}
       {...props}

@@ -60,7 +60,7 @@ function renderGroup(group: RenderGroup): ReactNode {
     case "user":
       return (
         <div key={group.key} className="mb-6 ml-auto w-fit max-w-[85%]">
-          <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent-soft px-4 py-2.5 text-sm leading-relaxed text-text">
+          <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent-soft px-4 py-2.5 text-[14px] leading-relaxed text-accent-foreground">
             {group.content}
           </div>
         </div>
@@ -69,7 +69,7 @@ function renderGroup(group: RenderGroup): ReactNode {
     case "assistant":
       return (
         <div key={group.key} className={`max-w-[90%] ${group.nextIsTool ? "mb-0" : "mb-5"}`}>
-          <div className="text-sm leading-relaxed text-text">
+          <div className="text-[14px] leading-relaxed text-ink">
             <Markdown>{group.content}</Markdown>
           </div>
         </div>

@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Brain,
+  ChevronLeft,
   Folder,
-  Menu,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -13,7 +13,6 @@ import {
   Trash2,
   FolderPlus,
   LogOut,
-  X,
 } from "lucide-react";
 
 import type { SessionSummary } from "../api/types";
@@ -43,6 +42,7 @@ interface SessionSidebarProps {
   onDeleteProject(projectId: string): void;
   onAddToProject(projectId: string, sessionKey: string): void;
   onRemoveFromProject(projectId: string, sessionKey: string): void;
+  collapsed?: boolean;
 }
 
 export default function SessionSidebar({
@@ -61,6 +61,7 @@ export default function SessionSidebar({
   onDeleteProject,
   onAddToProject,
   onRemoveFromProject,
+  collapsed = false,
 }: SessionSidebarProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -71,7 +72,6 @@ export default function SessionSidebar({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // Build a session lookup map for quick access
   const sessionMap = useMemo(() => {
     const map = new Map<string, SessionSummary>();
     for (const s of sessions) {
@@ -80,7 +80,6 @@ export default function SessionSidebar({
     return map;
   }, [sessions]);
 
-  // Filter based on search query
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return { projects, projectMap, orphans };
@@ -139,23 +138,67 @@ export default function SessionSidebar({
     onSelect(newKey);
   };
 
-  const sessionKeys = useMemo(
-    () => sessions.map((s) => s.key),
-    [sessions]
-  );
-
   const getPreview = (key: string) => {
     return sessionMap.get(key)?.preview ?? "";
   };
 
+  /* ── Collapsed: icon-only strip ─────────────────────────────── */
+  if (collapsed) {
+    return (
+      <div className="flex h-full flex-col items-center bg-sidebar py-4 gap-3">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Expand panel"
+          onClick={onToggleCollapse}
+          type="button"
+          className="text-ink-muted hover:text-ink"
+        >
+          <ChevronLeft size={18} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="New session"
+          onClick={onNew}
+          type="button"
+          className="text-ink-muted hover:text-ink"
+        >
+          <SquarePen size={18} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Skills"
+          type="button"
+          className="text-ink-muted hover:text-ink"
+        >
+          <Brain size={18} />
+        </Button>
+        <div className="flex-1" />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Settings"
+          onClick={() => navigate("/settings")}
+          type="button"
+          className="text-ink-muted hover:text-ink"
+        >
+          <Settings size={18} />
+        </Button>
+      </div>
+    );
+  }
+
+  /* ── Expanded: full sidebar ─────────────────────────────────── */
   return (
-    <div className="flex h-full flex-col border-r border-line bg-sidebar">
-      {/* ===== Header ===== */}
-      <div className="flex h-14 items-center justify-between px-4">
-        <span className="text-[15px] font-semibold tracking-tight text-sidebar-foreground">
+    <div className="flex h-full flex-col bg-sidebar">
+      {/* Header */}
+      <div className="flex h-12 items-center justify-between px-3">
+        <span className="text-[15px] font-semibold tracking-tight text-ink">
           Agent
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -165,9 +208,9 @@ export default function SessionSidebar({
               if (showSearch) setQuery("");
             }}
             type="button"
-            className="text-[#777]"
+            className="text-ink-muted hover:text-ink"
           >
-            {showSearch ? <X size={17} /> : <Search size={17} />}
+            <Search size={16} />
           </Button>
           <Button
             variant="ghost"
@@ -175,18 +218,18 @@ export default function SessionSidebar({
             aria-label="Collapse panel"
             onClick={onToggleCollapse}
             type="button"
-            className="text-[#777]"
+            className="text-ink-muted hover:text-ink"
           >
-            <Menu size={18} />
+            <ChevronLeft size={18} />
           </Button>
         </div>
       </div>
 
-      {/* ===== Search bar (conditional) ===== */}
+      {/* Search */}
       {showSearch && (
         <div className="px-3 pb-2">
-          <div className="flex items-center gap-1.5 rounded-xl border border-line bg-white px-3 py-2 transition-shadow focus-within:ring-2 focus-within:ring-ring/20">
-            <Search size={15} className="shrink-0 text-muted-foreground" />
+          <div className="flex items-center gap-2 rounded-xl border border-line/30 bg-surface px-3 py-1.5 transition-colors duration-fast focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-ring/30">
+            <Search size={14} className="shrink-0 text-ink-muted" />
             <Input
               className="h-auto border-0 bg-transparent p-0 text-[13px] shadow-none focus-visible:ring-0"
               value={query}
@@ -199,43 +242,41 @@ export default function SessionSidebar({
         </div>
       )}
 
-      {/* ===== Actions area ===== */}
-      <div className="px-3 pb-3">
+      {/* Actions */}
+      <div className="px-2 pb-2">
         <div className="space-y-0.5">
           <button
-            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-[13px] font-medium leading-6 text-sidebar-foreground transition-colors hover:bg-muted/80"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium leading-6 text-ink transition-colors duration-fast hover:bg-muted"
             onClick={onNew}
             type="button"
           >
-            <SquarePen size={16} strokeWidth={2} className="shrink-0 text-[#3f3f3f]" />
+            <SquarePen size={16} className="shrink-0 text-ink-secondary" />
             <span>新建对话</span>
           </button>
           <button
-            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-[13px] font-medium leading-6 text-sidebar-foreground transition-colors hover:bg-muted/80"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium leading-6 text-ink transition-colors duration-fast hover:bg-muted"
             type="button"
           >
-            <Brain size={16} className="shrink-0 text-[#3f3f3f]" />
+            <Brain size={16} className="shrink-0 text-ink-secondary" />
             <span>技能</span>
           </button>
         </div>
       </div>
 
-      {/* ===== Divider ===== */}
-      <div className="mx-4 border-t border-transparent" />
+      {/* Divider */}
+      <div className="mx-3 border-t border-line/20" />
 
-      {/* ===== History area (scrollable) ===== */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        {/* No results */}
+      {/* Session list */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {filtered.projects.length === 0 && filtered.orphans.length === 0 && (
-          <div className="mt-8 text-center text-[12px] text-muted-foreground">
+          <div className="mt-8 text-center text-[12px] text-ink-muted">
             {query.trim() ? "没有匹配的对话" : "暂无对话"}
           </div>
         )}
 
-        {/* ===== Projects section ===== */}
         {filtered.projects.length > 0 && (
           <div className="mb-3">
-            <div className="mb-2 px-1 text-[11px] font-medium text-[#b1b1b1]">
+            <div className="mb-1.5 px-2 text-[11px] font-medium text-ink-muted/70 tracking-wide">
               项目
             </div>
             {filtered.projects.map((project) => {
@@ -243,15 +284,14 @@ export default function SessionSidebar({
               const isExpanded = expandedProjects.has(project.id);
               return (
                 <div key={project.id} className="mb-0.5">
-                  {/* Project header row — entire row clickable to expand */}
                   <div
-                    className="group/project flex cursor-pointer items-center gap-0.5 rounded-lg px-1.5 py-1 hover:bg-muted/70"
+                    className="group/project flex cursor-pointer items-center gap-0.5 rounded-lg px-2 py-1 transition-colors duration-fast hover:bg-muted"
                     onClick={() => toggleProject(project.id)}
                   >
-                    <span className="flex items-center gap-1.5 rounded p-0.5 text-muted-foreground">
+                    <span className="flex items-center gap-1.5 rounded text-ink-muted">
                       <Folder size={13} />
                     </span>
-                    <span className="flex-1 truncate text-[12px] font-medium text-sidebar-foreground">
+                    <span className="flex-1 truncate text-[12px] font-medium text-ink">
                       {project.name}
                     </span>
                     <Button
@@ -260,7 +300,7 @@ export default function SessionSidebar({
                       aria-label={`New session in ${project.name}`}
                       onClick={(e) => { e.stopPropagation(); handleNewInProject(project.id); }}
                       type="button"
-                      className="shrink-0 opacity-0 transition-opacity group-hover/project:opacity-100"
+                      className="shrink-0 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:text-ink"
                     >
                       <Plus size={13} />
                     </Button>
@@ -272,7 +312,7 @@ export default function SessionSidebar({
                             size="icon-xs"
                             aria-label="Project menu"
                             type="button"
-                            className="shrink-0 opacity-0 transition-opacity group-hover/project:opacity-100"
+                            className="shrink-0 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:text-ink"
                             onClick={(e) => e.stopPropagation()}
                             {...props}
                           />
@@ -302,11 +342,10 @@ export default function SessionSidebar({
                     </Popover>
                   </div>
 
-                  {/* Project sessions */}
                   {isExpanded && (
-                    <div className="ml-3 border-l border-line/70 pl-2">
+                    <div className="ml-3 border-l border-line/20 pl-2.5">
                       {keys.length === 0 ? (
-                        <div className="px-2.5 py-2 text-[13px] text-muted-foreground">
+                        <div className="px-2.5 py-2 text-[12px] text-ink-muted">
                           这个项目还没有对话
                         </div>
                       ) : (
@@ -335,10 +374,9 @@ export default function SessionSidebar({
           </div>
         )}
 
-        {/* ===== Conversations section (orphans) ===== */}
         {filtered.orphans.length > 0 && (
           <div>
-            <div className="mb-2 px-1 text-[11px] font-medium text-[#b1b1b1]">
+            <div className="mb-1.5 px-2 text-[11px] font-medium text-ink-muted/70 tracking-wide">
               对话
             </div>
             {filtered.orphans.map((key) => (
@@ -361,19 +399,19 @@ export default function SessionSidebar({
         )}
       </div>
 
-      {/* ===== Bottom: Settings ===== */}
-      <div className="border-t border-line/70 px-4 py-3">
+      {/* Bottom: Settings */}
+      <div className="border-t border-line/20 px-2 py-2">
         <button
-          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-[13px] font-medium leading-6 text-sidebar-foreground transition-colors hover:bg-muted/80"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium leading-6 text-ink transition-colors duration-fast hover:bg-muted"
           onClick={() => navigate("/settings")}
           type="button"
         >
-          <Settings size={16} className="shrink-0 text-[#3f3f3f]" />
+          <Settings size={16} className="shrink-0 text-ink-secondary" />
           <span>设置</span>
         </button>
       </div>
 
-      {/* ===== Rename inline dialog (rendered at root) ===== */}
+      {/* Rename dialog */}
       {renaming && (
         <RenameDialog
           value={renameValue}
@@ -390,7 +428,7 @@ export default function SessionSidebar({
 }
 
 /* ------------------------------------------------------------------ */
-/* Session item component                                             */
+/* Session item                                                        */
 /* ------------------------------------------------------------------ */
 
 interface SessionItemProps {
@@ -428,24 +466,22 @@ function SessionItem({
     try {
       await onDelete(sessionKey);
     } catch {
-      // Keep item visible on error
+      // Keep visible on error
     } finally {
       setDeleting(false);
     }
   };
 
-  // Other projects (not the current one) for "Add to project" submenu
   const otherProjects = projects.filter((p) => p.id !== currentProjectId);
 
   return (
     <div
-      className={`group/session relative flex items-center gap-1 rounded-lg transition-colors ${
+      className={`group/session relative flex items-center gap-0.5 rounded-lg transition-colors duration-fast ${
         isActive
-          ? "bg-white text-foreground shadow-[inset_0_0_0_1px_#eeeeee]"
-          : "text-[#2f2f2f] hover:bg-muted/70"
-      } ${deleting ? "pointer-events-none opacity-50" : ""}`}
+          ? "bg-muted text-ink"
+          : "text-ink hover:bg-muted"
+      } ${deleting ? "pointer-events-none opacity-40" : ""}`}
     >
-      {/* Clickable area for selecting session */}
       <button
         className="flex min-w-0 flex-1 items-center overflow-hidden py-1.5 pl-2.5 text-left"
         onClick={() => onSelect(sessionKey)}
@@ -457,24 +493,22 @@ function SessionItem({
             {displayName}
           </div>
           {preview && (
-            <div className="truncate text-[12px] leading-relaxed text-muted-foreground">
+            <div className="truncate text-[12px] leading-relaxed text-ink-muted">
               {preview}
             </div>
           )}
         </div>
       </button>
 
-      {/* Three-dot menu button — visible on row hover */}
       <Popover
         onOpenChange={(open) => {
-          // Sync internal state for hover styling
           setMenuOpen(open);
         }}
       >
         <PopoverTrigger
           render={(props) => (
             <button
-              className={`shrink-0 rounded-md p-1 transition-all hover:bg-muted ${
+              className={`shrink-0 rounded-md p-1 transition-all duration-fast hover:bg-muted ${
                 menuOpen || isActive
                   ? "opacity-100"
                   : "opacity-0 group-hover/session:opacity-100"
@@ -485,7 +519,7 @@ function SessionItem({
             />
           )}
         >
-          <MoreHorizontal size={13} />
+          <MoreHorizontal size={13} className="text-ink-muted" />
         </PopoverTrigger>
         <PopoverContent align="start" sideOffset={2}>
           <PopoverItem onClick={() => onRename(sessionKey)}>
@@ -496,12 +530,11 @@ function SessionItem({
             <PopoverItem>
               <FolderPlus size={13} />
               <span>Add to project</span>
-              {/* Submenu-like: list projects inline */}
               <div className="ml-auto flex gap-1">
                 {otherProjects.slice(0, 3).map((p) => (
                   <button
                     key={p.id}
-                    className="rounded px-1.5 py-0.5 text-[11px] hover:bg-accent hover:text-accent-foreground"
+                    className="rounded-md px-1.5 py-0.5 text-[11px] transition-colors duration-fast hover:bg-muted hover:text-ink"
                     onClick={(e) => {
                       e.stopPropagation();
                       onAddToProject(p.id, sessionKey);
@@ -515,7 +548,7 @@ function SessionItem({
                   </button>
                 ))}
                 {otherProjects.length > 3 && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-ink-muted">
                     +{otherProjects.length - 3}
                   </span>
                 )}
@@ -530,7 +563,7 @@ function SessionItem({
               Remove from project
             </PopoverItem>
           )}
-          <div className="my-1 border-t border-line/40" />
+          <div className="my-1 border-t border-line/20" />
           <PopoverItem
             onClick={handleDelete}
             className="text-red hover:bg-red/10"
@@ -557,13 +590,13 @@ interface RenameDialogProps {
 
 function RenameDialog({ value, onChange, onSubmit, onCancel }: RenameDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/6 backdrop-blur-[1px]">
       <div
-        className="w-64 rounded-xl bg-popover p-3 shadow-lg ring-1 ring-foreground/10"
+        className="w-64 rounded-xl bg-surface p-3 shadow-lg ring-1 ring-line/20"
         onClick={(e) => e.stopPropagation()}
       >
         <Input
-          className="mb-2 w-full text-[13px]"
+          className="mb-2.5 w-full text-[13px]"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {

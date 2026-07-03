@@ -5,83 +5,133 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Existing design tokens
-        background: "#ffffff",
-        foreground: "#242424",
-        surface: "#ffffff",
-        ink: "#1f1f1f",
-        text: "#242424",
+        /* ── Background hierarchy ─────────────────────────────── */
+        background: "var(--bg-base)",
+        foreground: "var(--ink)",
+        surface: "var(--bg-surface)",
 
-        // muted: DEFAULT is the background (for shadcn hover), foreground is the text
+        /* ── Muted (for shadcn hover states) ──────────────────── */
         muted: {
-          DEFAULT: "#f3f3f3",
-          foreground: "#8d8d8d"
+          DEFAULT: "var(--bg-muted)",
+          foreground: "var(--ink-muted)",
         },
 
-        line: "#ececec",
-
-        // accent: DEFAULT is brand blue, soft is light blue bg
+        /* ── Accent — warm amber, restrained ≤10% ────────────── */
         accent: {
-          DEFAULT: "#8fc4ff",
-          foreground: "#1f64b8",
-          soft: "#eff7ff"
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
+          soft: "var(--accent-soft)",
         },
 
-        "approval-soft": "#fff6df",
-        green: "#008767",
-        red: "#b42318",
-        sidebar: "#fafafa",
-        connector: "#dddddd",
-        "tool-bg": "#f7f7f7",
+        /* ── Ink / text tokens ────────────────────────────────── */
+        ink: "var(--ink)",
+        "ink-secondary": "var(--ink-secondary)",
+        "ink-muted": "var(--ink-muted)",
 
-        // shadcn/ui required tokens
-        card: "#ffffff",
-        "card-foreground": "#242424",
-        popover: "#ffffff",
-        "popover-foreground": "#242424",
+        /* ── Borders ──────────────────────────────────────────── */
+        line: "var(--border)",
+        "line-light": "var(--border-light)",
+        "line-hover": "var(--border-hover)",
+
+        /* ── Semantic ─────────────────────────────────────────── */
+        green: "var(--success)",
+        "green-soft": "var(--success-soft)",
+        red: "var(--error)",
+        "red-soft": "var(--error-soft)",
+
+        /* ── Sidebar ──────────────────────────────────────────── */
+        sidebar: "var(--bg-sidebar)",
+        "sidebar-foreground": "var(--ink)",
+        "sidebar-primary": "var(--accent)",
+        "sidebar-primary-foreground": "var(--ink-inverse)",
+        "sidebar-accent": "var(--bg-muted)",
+        "sidebar-accent-foreground": "var(--ink)",
+        "sidebar-border": "var(--border-light)",
+        "sidebar-ring": "var(--ring)",
+
+        /* ── Tool / code backgrounds ──────────────────────────── */
+        "tool-bg": "var(--bg-muted)",
+        connector: "var(--border-light)",
+
+        /* ── Approval (warning) ───────────────────────────────── */
+        "approval-soft": "var(--warning-soft)",
+
+        /* ── shadcn/ui required tokens ────────────────────────── */
+        card: "var(--bg-surface)",
+        "card-foreground": "var(--ink)",
+        popover: "var(--bg-surface)",
+        "popover-foreground": "var(--ink)",
         primary: {
-          DEFAULT: "#8a8d91",
-          foreground: "#ffffff"
+          DEFAULT: "var(--accent)",
+          foreground: "var(--ink-inverse)",
         },
         secondary: {
-          DEFAULT: "#f5f5f5",
-          foreground: "#242424"
+          DEFAULT: "var(--bg-muted)",
+          foreground: "var(--ink)",
         },
         destructive: {
-          DEFAULT: "#b42318",
-          foreground: "#ffffff"
+          DEFAULT: "var(--error)",
+          foreground: "var(--ink-inverse)",
         },
-        border: "#ececec",
-        input: "#ececec",
-        ring: "#8fc4ff",
+        border: "var(--border)",
+        input: "var(--border)",
+        ring: "var(--ring)",
+      },
 
-        // Sidebar tokens
-        "sidebar-background": "#fafafa",
-        "sidebar-foreground": "#2f2f2f",
-        "sidebar-primary": "#1f64b8",
-        "sidebar-primary-foreground": "#ffffff",
-        "sidebar-accent": "#f1f1f1",
-        "sidebar-accent-foreground": "#242424",
-        "sidebar-border": "#ececec",
-        "sidebar-ring": "#8fc4ff"
-      },
+      /* ── Border radius ──────────────────────────────────────── */
       borderRadius: {
-        ui: "8px"
+        ui: "var(--radius)",
+        xs: "var(--radius-xs)",
+        sm: "var(--radius-sm)",
+        DEFAULT: "var(--radius)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
       },
+
+      /* ── Typography ─────────────────────────────────────────── */
       fontFamily: {
         sans: [
+          "Geist",
+          "Inter",
           "HarmonyOS Sans SC",
-          "MiSans",
           "PingFang SC",
           "Microsoft YaHei",
-          "Inter",
           "ui-sans-serif",
           "system-ui",
-          "sans-serif"
+          "-apple-system",
+          "sans-serif",
         ],
-        mono: ["SFMono-Regular", "Cascadia Code", "Roboto Mono", "Consolas", "monospace"]
-      }
-    }
+        mono: [
+          "Geist Mono",
+          "SF Mono",
+          "Cascadia Code",
+          "Roboto Mono",
+          "Consolas",
+          "Liberation Mono",
+          "monospace",
+        ],
+      },
+
+      /* ── Box shadow ─────────────────────────────────────────── */
+      boxShadow: {
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+      },
+
+      /* ── Transition timing ──────────────────────────────────── */
+      transitionTimingFunction: {
+        "ease-expo": "var(--ease-out-expo)",
+      },
+      transitionDuration: {
+        fast: "var(--duration-fast)",
+        normal: "var(--duration-normal)",
+        slow: "var(--duration-slow)",
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 } satisfies Config;

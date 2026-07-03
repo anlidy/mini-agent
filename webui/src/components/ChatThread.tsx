@@ -40,7 +40,6 @@ export default function ChatThread(props: ChatThreadProps) {
   const wasActiveRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Clear draft when turn completes
   useEffect(() => {
     if (wasActiveRef.current && !props.active && !props.error) {
       setDraft("");
@@ -48,12 +47,10 @@ export default function ChatThread(props: ChatThreadProps) {
     wasActiveRef.current = props.active;
   }, [props.active, props.error]);
 
-  // Clear user message on session change
   useEffect(() => {
     setCurrentUserMessage("");
   }, [props.sessionKey]);
 
-  // Clear currentUserMessage once persisted to the session
   useEffect(() => {
     if (currentUserMessage && props.messages.some(
       (m) => m.role === "user" && renderContent(m.content) === currentUserMessage
@@ -62,7 +59,6 @@ export default function ChatThread(props: ChatThreadProps) {
     }
   }, [props.messages, currentUserMessage]);
 
-  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -105,18 +101,18 @@ export default function ChatThread(props: ChatThreadProps) {
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-surface">
-      {/* Top bar */}
-      <div className="flex h-14 shrink-0 items-center justify-end px-5">
+    <div className="flex h-full min-w-0 flex-col bg-background">
+      {/* Top bar — minimal, right-aligned, no border */}
+      <div className="flex h-12 shrink-0 items-center justify-end px-4">
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label="Appearance"
           type="button"
           title="Appearance"
-          className="mr-1 text-muted-foreground"
+          className="mr-0.5 text-ink-muted hover:text-ink"
         >
-          <Moon size={18} />
+          <Moon size={17} />
         </Button>
         {props.onToggleRight && (
           <Button
@@ -126,6 +122,7 @@ export default function ChatThread(props: ChatThreadProps) {
             onClick={props.onToggleRight}
             type="button"
             title={props.isRightCollapsed ? "Open files panel" : "Close files panel"}
+            className="text-ink-muted hover:text-ink"
           >
             {props.isRightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
           </Button>
@@ -133,9 +130,10 @@ export default function ChatThread(props: ChatThreadProps) {
       </div>
 
       {showStartScreen ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-[17vh] pt-2">
-          <div className="w-full max-w-[640px]">
-            <h1 className="mb-8 text-center text-[28px] font-medium leading-tight tracking-normal text-[#202124] md:text-[36px]">
+        /* ── Empty state ── */
+        <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-[16vh] pt-2">
+          <div className="w-full max-w-[600px]">
+            <h1 className="mb-8 text-center text-[28px] font-medium leading-tight tracking-tight text-ink md:text-[34px] text-balance">
               今天从哪里开始?
             </h1>
             {composerEl}
@@ -143,20 +141,23 @@ export default function ChatThread(props: ChatThreadProps) {
         </div>
       ) : (
         <>
-          {/* Messages area */}
+          {/* ── Messages area ── */}
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-[640px] px-5 pb-10 pt-6">
+            <div className="mx-auto max-w-[760px] px-5 pb-10 pt-6">
               <TimelineRenderer timeline={timeline} />
 
               {props.error ? (
-                <div className="rounded-lg bg-red/10 p-3 text-sm text-red">{props.error}</div>
+                <div className="mt-4 rounded-xl bg-red-soft px-4 py-3 text-[13px] leading-relaxed text-red">
+                  {props.error}
+                </div>
               ) : null}
             </div>
           </div>
 
           <ApprovalCard approval={props.approval} onResolve={props.onApprove} />
 
-          <div className="mx-auto w-full max-w-[640px]">
+          {/* ── Composer ── */}
+          <div className="mx-auto w-full max-w-[760px]">
             {composerEl}
           </div>
         </>

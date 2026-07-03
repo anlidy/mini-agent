@@ -9,14 +9,12 @@ export interface ToolStep {
   title: string;
   status: ToolStepStatus;
   detail?: string;
-  /** Distinguishes tool call arguments from tool results for rendering. */
   detailKind?: "args" | "result";
 }
 
 interface ToolCallCardProps {
   step: ToolStep;
   isLast: boolean;
-  /** When nested inside a group, show indent + vertical line */
   nested?: boolean;
 }
 
@@ -25,7 +23,6 @@ function parseDetail(detail?: string, detailKind?: "args" | "result"): { input?:
   try {
     const parsed = JSON.parse(detail);
     if (typeof parsed === "object" && parsed !== null) {
-      // When we know it's a result, treat JSON as output instead of input.
       if (detailKind === "result") {
         return { output: JSON.stringify(parsed, null, 2) };
       }
@@ -44,7 +41,7 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
 
   return (
     <div className="flex">
-      {/* Indent + vertical line — only when nested */}
+      {/* Indent + vertical connector line */}
       {nested && (
         <div className="relative shrink-0" style={{ width: 20 }}>
           <div
@@ -54,12 +51,16 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
         </div>
       )}
 
-      {/* Inline tool indicator */}
+      {/* Tool indicator */}
       <div className="min-w-0 flex-1">
         <button
-          className={`group inline-flex items-center gap-1 rounded px-1.5 leading-relaxed transition-colors -ml-0.5 ${
-            error ? "text-red/80" : running ? "text-accent/80" : "text-muted-foreground"
-          } hover:bg-line/30`}
+          className={`group inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 leading-relaxed transition-colors duration-fast -ml-0.5 ${
+            error
+              ? "text-red/80 hover:bg-red/5"
+              : running
+              ? "text-accent hover:bg-accent/5"
+              : "text-ink-muted hover:bg-muted"
+          }`}
           onClick={() => setExpanded((v) => !v)}
           type="button"
         >
@@ -70,7 +71,7 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
           )}
           {hasContent && (
-            <span className="text-[10px]">
+            <span className="text-[10px] text-ink-muted/70">
               {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
             </span>
           )}
@@ -80,16 +81,20 @@ export default function ToolCallCard({ step, isLast, nested = false }: ToolCallC
           <div className="ml-2 mt-1 space-y-1.5">
             {input && (
               <div>
-                <div className="mb-0.5 font-mono text-[10px] text-[#9aa2aa]">args</div>
-                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted-foreground max-h-32 overflow-y-auto">
+                <div className="mb-0.5 font-mono text-[10px] font-medium text-ink-muted/60">
+                  args
+                </div>
+                <pre className="whitespace-pre-wrap rounded-lg border border-line/20 bg-muted/50 p-2.5 font-mono text-[11px] leading-relaxed text-ink-secondary max-h-36 overflow-y-auto">
                   {input}
                 </pre>
               </div>
             )}
             {output && (
               <div>
-                <div className="mb-0.5 font-mono text-[10px] text-[#9aa2aa]">result</div>
-                <pre className="whitespace-pre-wrap rounded border border-line bg-[#fafbfa] p-2 font-mono text-[11px] leading-relaxed text-muted-foreground max-h-32 overflow-y-auto">
+                <div className="mb-0.5 font-mono text-[10px] font-medium text-ink-muted/60">
+                  result
+                </div>
+                <pre className="whitespace-pre-wrap rounded-lg border border-line/20 bg-muted/50 p-2.5 font-mono text-[11px] leading-relaxed text-ink-secondary max-h-36 overflow-y-auto">
                   {output}
                 </pre>
               </div>

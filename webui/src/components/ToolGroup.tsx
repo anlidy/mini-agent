@@ -16,10 +16,10 @@ export default function ToolGroup({ steps }: { steps: ToolStep[] }) {
   const running = steps.filter((s) => s.status === "pending" || s.status === "approval").length;
 
   return (
-    <div>
-      {/* Group header — no indent, aligned with text */}
+    <div className="mb-1">
+      {/* Group header */}
       <button
-        className="group inline-flex items-center gap-1 rounded px-1.5 leading-relaxed text-muted-foreground hover:bg-line/30 -ml-0.5"
+        className="group inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 leading-relaxed text-ink-muted transition-colors duration-fast hover:bg-muted -ml-0.5"
         onClick={() => setExpanded((v) => !v)}
         type="button"
       >
@@ -28,10 +28,12 @@ export default function ToolGroup({ steps }: { steps: ToolStep[] }) {
         {running > 0 && (
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
         )}
-        <span className="text-[10px]">{expanded ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-ink-muted/70">
+          {expanded ? "▾" : "▸"}
+        </span>
       </button>
 
-      {/* Expanded children — indented with vertical lines */}
+      {/* Expanded children with indent + vertical lines */}
       {expanded && (
         <div>
           {steps.map((step, i) => (

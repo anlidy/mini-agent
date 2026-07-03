@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import ResizablePanel from "@/components/ResizablePanel";
@@ -21,7 +20,7 @@ describe("ResizablePanel", () => {
     expect(screen.getByText("Panel content")).toBeInTheDocument();
   });
 
-  it("hides children and shows expand button when collapsed", () => {
+  it("still renders children when collapsed (sidebar handles its own collapsed view)", () => {
     render(
       <ResizablePanel
         collapsed={true}
@@ -34,30 +33,12 @@ describe("ResizablePanel", () => {
       </ResizablePanel>
     );
 
-    expect(screen.queryByText("Panel content")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expand left panel" })).toBeInTheDocument();
+    // Children are always rendered — the panel just narrows to 48px
+    expect(screen.getByText("Panel content")).toBeInTheDocument();
   });
 
-  it("calls onToggle when expand button is clicked", async () => {
-    const onToggle = vi.fn();
-    render(
-      <ResizablePanel
-        collapsed={true}
-        onToggle={onToggle}
-        width={260}
-        onWidthChange={vi.fn()}
-        side="left"
-      >
-        <div>content</div>
-      </ResizablePanel>
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: "Expand left panel" }));
-    expect(onToggle).toHaveBeenCalledOnce();
-  });
-
-  it("shows right chevron for left panel, left chevron for right panel", () => {
-    const { rerender } = render(
+  it("renders at 48px width when collapsed", () => {
+    const { container } = render(
       <ResizablePanel
         collapsed={true}
         onToggle={vi.fn()}
@@ -69,21 +50,24 @@ describe("ResizablePanel", () => {
       </ResizablePanel>
     );
 
-    expect(screen.getByRole("button", { name: "Expand left panel" })).toBeInTheDocument();
+    const panel = container.firstElementChild as HTMLElement;
+    expect(panel.style.width).toBe("48px");
+  });
 
-    rerender(
+  it("hides drag handle when collapsed", () => {
+    const { container } = render(
       <ResizablePanel
         collapsed={true}
         onToggle={vi.fn()}
         width={260}
         onWidthChange={vi.fn()}
-        side="right"
+        side="left"
       >
         <div>content</div>
       </ResizablePanel>
     );
 
-    expect(screen.getByRole("button", { name: "Expand right panel" })).toBeInTheDocument();
+    expect(container.querySelector(".cursor-col-resize")).toBeNull();
   });
 
   it("resizes on drag", () => {

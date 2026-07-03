@@ -32,7 +32,7 @@ export default function AppShell({
   const hasFilesSidebar = filesSidebar != null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-text">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-ink">
       <ResizablePanel
         collapsed={leftCollapsed}
         onToggle={onToggleLeft}
@@ -43,7 +43,7 @@ export default function AppShell({
         {sessionSidebar}
       </ResizablePanel>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-hidden bg-surface">
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
         {children}
       </main>
 

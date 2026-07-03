@@ -29,14 +29,14 @@ export default function FilesSidebar({
   const [tab, setTab] = useState<Tab>("files");
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar">
       {/* Tab bar */}
-      <div className="flex shrink-0 items-center border-b border-line">
+      <div className="flex shrink-0 items-center border-b border-line/20">
         <button
-          className={`flex-1 py-2 text-center text-[13px] font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-center text-[12px] font-medium transition-colors duration-fast ${
             tab === "files"
-              ? "border-b-2 border-accent text-accent"
-              : "text-muted-foreground hover:text-text"
+              ? "border-b-[1.5px] border-accent text-accent"
+              : "text-ink-muted hover:text-ink"
           }`}
           onClick={() => setTab("files")}
           type="button"
@@ -44,10 +44,10 @@ export default function FilesSidebar({
           Files
         </button>
         <button
-          className={`flex-1 py-2 text-center text-[13px] font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-center text-[12px] font-medium transition-colors duration-fast ${
             tab === "changes"
-              ? "border-b-2 border-accent text-accent"
-              : "text-muted-foreground hover:text-text"
+              ? "border-b-[1.5px] border-accent text-accent"
+              : "text-ink-muted hover:text-ink"
           }`}
           onClick={() => setTab("changes")}
           type="button"
@@ -84,9 +84,12 @@ function FilesTab({
 }: FilesSidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Workspace path + refresh */}
+      {/* Workspace path */}
       <div className="flex items-center gap-1.5 px-3 py-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground" title={workspacePath ?? tree?.path ?? "."}>
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-muted"
+          title={workspacePath ?? tree?.path ?? "."}
+        >
           {workspacePath ?? tree?.path ?? "."}
         </span>
         <Button
@@ -95,30 +98,43 @@ function FilesTab({
           aria-label="Refresh files"
           onClick={onRefresh}
           type="button"
+          className="text-ink-muted hover:text-ink"
         >
           <RefreshCw size={13} />
         </Button>
       </div>
 
       {/* File tree */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2">
         {tree?.children?.map((node) => (
-          <FileTreeRow key={node.path} node={node} selectedPath={selectedPath} depth={0} onSelect={onSelect} />
+          <FileTreeRow
+            key={node.path}
+            node={node}
+            selectedPath={selectedPath}
+            depth={0}
+            onSelect={onSelect}
+          />
         ))}
         {!tree?.children?.length && (
-          <div className="mt-6 text-center text-[13px] text-muted-foreground">No files</div>
+          <div className="mt-8 text-center text-[12px] text-ink-muted">
+            No files
+          </div>
         )}
       </div>
 
       {error ? (
-        <div className="mx-2.5 mt-2 rounded-md bg-red/10 p-2.5 text-xs text-red">{error}</div>
+        <div className="mx-2.5 mb-2 rounded-lg bg-red-soft px-3 py-2 text-[12px] leading-relaxed text-red">
+          {error}
+        </div>
       ) : null}
 
       {/* File preview */}
       {selectedPath ? (
-        <div className="mx-2.5 mb-3 shrink-0 rounded-md bg-white p-2.5 shadow-[inset_0_0_0_1px_#e1e5e2]">
-          <div className="mb-1.5 truncate font-mono text-[11px] font-medium text-ink">{selectedPath}</div>
-          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <div className="mx-2 mb-3 shrink-0 rounded-xl bg-surface p-3 shadow-[inset_0_0_0_1px_var(--border-light)]">
+          <div className="mb-1.5 truncate font-mono text-[11px] font-medium text-ink">
+            {selectedPath}
+          </div>
+          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-ink-muted">
             {selectedContent?.slice(0, 1200) ?? "Loading..."}
           </pre>
         </div>
@@ -131,8 +147,8 @@ function ChangesTab() {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-[13px] text-muted-foreground">Changes will appear here</p>
-        <p className="mt-1 text-[12px] text-[#9aa2aa]">
+        <p className="text-[13px] text-ink-muted">Changes will appear here</p>
+        <p className="mt-1 text-[12px] text-ink-muted/70">
           Diff view for workspace modifications is coming soon.
         </p>
       </div>
@@ -157,8 +173,12 @@ function FileTreeRow({ node, selectedPath, depth, onSelect }: FileTreeRowProps) 
 
   const content = (
     <>
-      <span className="grid h-4 w-4 place-items-center">
-        {isFile ? <File size={13} /> : <Folder size={13} />}
+      <span className="grid h-4 w-4 place-items-center shrink-0">
+        {isFile ? (
+          <File size={13} className="text-ink-muted" />
+        ) : (
+          <Folder size={13} className="text-ink-muted" />
+        )}
       </span>
       <span className="truncate">{node.path}</span>
     </>
@@ -168,10 +188,10 @@ function FileTreeRow({ node, selectedPath, depth, onSelect }: FileTreeRowProps) 
     <div>
       {isFile ? (
         <button
-          className={`grid min-h-[28px] w-full grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-md px-2 text-left font-mono text-xs ${
+          className={`grid min-h-[28px] w-full grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-lg px-2 text-left font-mono text-[12px] transition-colors duration-fast ${
             isSelected
-              ? "bg-white text-text shadow-[inset_0_0_0_1px_#e1e5e2]"
-              : "text-muted-foreground hover:bg-white/60"
+              ? "bg-muted text-ink"
+              : "text-ink-secondary hover:bg-muted"
           }`}
           style={{ paddingLeft: `${8 + depth * 12}px` }}
           aria-current={isSelected ? "page" : undefined}
@@ -182,14 +202,18 @@ function FileTreeRow({ node, selectedPath, depth, onSelect }: FileTreeRowProps) 
         </button>
       ) : (
         <button
-          className="grid min-h-[28px] w-full grid-cols-[18px_18px_minmax(0,1fr)] items-center gap-1 rounded-md px-2 text-left font-mono text-xs text-muted-foreground hover:bg-white/60"
+          className="grid min-h-[28px] w-full grid-cols-[16px_18px_minmax(0,1fr)] items-center gap-1 rounded-lg px-2 text-left font-mono text-[12px] text-ink-secondary transition-colors duration-fast hover:bg-muted"
           style={{ paddingLeft: `${8 + depth * 12}px` }}
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
         >
           <span className="grid h-4 w-4 place-items-center">
-            {hasChildren && expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            {hasChildren && expanded ? (
+              <ChevronDown size={12} className="text-ink-muted" />
+            ) : (
+              <ChevronRight size={12} className="text-ink-muted" />
+            )}
           </span>
           {content}
         </button>

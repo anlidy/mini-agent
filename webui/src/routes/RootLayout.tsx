@@ -93,6 +93,7 @@ export default function RootLayout() {
             onDeleteProject={projects.deleteProject}
             onAddToProject={projects.addSessionToProject}
             onRemoveFromProject={projects.removeSessionFromProject}
+            collapsed={leftCollapsed}
           />
         }
         filesSidebar={

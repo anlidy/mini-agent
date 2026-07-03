@@ -13,12 +13,14 @@ export default function ApprovalCard({ approval, onResolve }: ApprovalCardProps)
   }
 
   return (
-    <div className="mx-auto mb-3 max-w-[800px] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 shadow-lg">
-      <div className="mb-2 flex items-center gap-2">
-        <ShieldAlert size={15} className="text-amber-600" />
-        <span className="text-[13px] font-semibold text-ink">Approve command?</span>
+    <div className="mx-auto mb-3 max-w-[760px] rounded-2xl border border-[color-mix(in_oklch,var(--warning),var(--bg-base)_85%)] bg-warning-soft px-4 py-3.5">
+      <div className="mb-2.5 flex items-center gap-2">
+        <ShieldAlert size={16} className="text-warning" />
+        <span className="text-[13px] font-semibold text-ink">
+          Approve command?
+        </span>
       </div>
-      <code className="mb-3 block break-words rounded border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-ink">
+      <code className="mb-3 block break-words rounded-xl border border-line/20 bg-surface px-3.5 py-2.5 font-mono text-[12px] leading-relaxed text-ink">
         {approval.command}
       </code>
       <div className="flex gap-2">
@@ -26,9 +28,8 @@ export default function ApprovalCard({ approval, onResolve }: ApprovalCardProps)
           Approve
         </Button>
         <Button
-          variant="outline"
+          variant="destructive"
           size="sm"
-          className="border-red/30 text-red hover:bg-red/5"
           onClick={() => onResolve(false)}
           type="button"
         >
