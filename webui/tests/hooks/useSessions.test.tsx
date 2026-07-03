@@ -23,7 +23,7 @@ function sessionSummary(key: string): SessionSummary {
     createdAt: "",
     updatedAt: "",
     messageCount: 1,
-    preview: `${key} preview`
+    title: ""
   };
 }
 

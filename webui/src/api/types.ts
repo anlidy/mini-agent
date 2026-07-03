@@ -3,7 +3,7 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
-  preview: string;
+  title: string;
 }
 
 export interface MessageRecord {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Brain,
@@ -72,14 +72,6 @@ export default function SessionSidebar({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const sessionMap = useMemo(() => {
-    const map = new Map<string, SessionSummary>();
-    for (const s of sessions) {
-      map.set(s.key, s);
-    }
-    return map;
-  }, [sessions]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return { projects, projectMap, orphans };
@@ -90,8 +82,7 @@ export default function SessionSidebar({
       const projectMatch = project?.name.toLowerCase().includes(q);
       const matchingKeys = keys.filter((k) => {
         const name = getDisplayName(k).toLowerCase();
-        const preview = sessionMap.get(k)?.preview?.toLowerCase() ?? "";
-        return projectMatch || name.includes(q) || preview.includes(q);
+        return projectMatch || name.includes(q);
       });
       if (matchingKeys.length > 0 || projectMatch) {
         filteredProjectMap.set(projectId, matchingKeys.length > 0 ? matchingKeys : keys);
@@ -100,12 +91,11 @@ export default function SessionSidebar({
 
     const filteredOrphans = orphans.filter((k) => {
       const name = getDisplayName(k).toLowerCase();
-      const preview = sessionMap.get(k)?.preview?.toLowerCase() ?? "";
-      return name.includes(q) || preview.includes(q);
+      return name.includes(q);
     });
 
     return { projects, projectMap: filteredProjectMap, orphans: filteredOrphans };
-  }, [query, projects, projectMap, orphans, getDisplayName, sessionMap]);
+  }, [query, projects, projectMap, orphans, getDisplayName]);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects((prev) => {
@@ -132,14 +122,15 @@ export default function SessionSidebar({
     setRenameValue("");
   };
 
-  const handleNewInProject = (projectId: string) => {
-    const newKey = `session-${crypto.randomUUID()}`;
-    onAddToProject(projectId, newKey);
-    onSelect(newKey);
+  const cancelRename = () => {
+    setRenaming(null);
+    setRenameValue("");
   };
 
-  const getPreview = (key: string) => {
-    return sessionMap.get(key)?.preview ?? "";
+  const handleNewInProject = (projectId: string) => {
+    const newKey = crypto.randomUUID();
+    onAddToProject(projectId, newKey);
+    onSelect(newKey);
   };
 
   /* ── Collapsed: icon-only strip ─────────────────────────────── */
@@ -306,24 +297,19 @@ export default function SessionSidebar({
                     </Button>
                     <Popover>
                       <PopoverTrigger
+                        aria-label="Project menu"
+                        className="shrink-0 rounded-md p-0.5 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:bg-muted hover:text-ink"
+                        onClick={(e) => e.stopPropagation()}
                         render={(props) => (
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Project menu"
-                            type="button"
-                            className="shrink-0 text-ink-muted opacity-0 transition-opacity duration-fast group-hover/project:opacity-100 hover:text-ink"
-                            onClick={(e) => e.stopPropagation()}
-                            {...props}
-                          />
+                          <button {...props} type="button">
+                            <MoreHorizontal size={12} />
+                          </button>
                         )}
-                      >
-                        <MoreHorizontal size={12} />
-                      </PopoverTrigger>
+                      />
                       <PopoverContent align="start" sideOffset={4}>
                         <PopoverItem
                           onClick={() => {
-                            const newKey = `session-${crypto.randomUUID()}`;
+                            const newKey = crypto.randomUUID();
                             onAddToProject(project.id, newKey);
                             onSelect(newKey);
                           }}
@@ -354,10 +340,15 @@ export default function SessionSidebar({
                             key={key}
                             sessionKey={key}
                             displayName={getDisplayName(key)}
-                            preview={getPreview(key)}
+
                             isActive={key === activeKey}
+                            isRenaming={renaming === key}
+                            renameValue={renameValue}
                             onSelect={onSelect}
                             onRename={startRename}
+                            onRenameChange={setRenameValue}
+                            onRenameSubmit={submitRename}
+                            onRenameCancel={cancelRename}
                             onDelete={onDelete}
                             projects={projects}
                             currentProjectId={project.id}
@@ -384,10 +375,17 @@ export default function SessionSidebar({
                 key={key}
                 sessionKey={key}
                 displayName={getDisplayName(key)}
-                preview={getPreview(key)}
                 isActive={key === activeKey}
+                isRenaming={renaming === key}
+                renameValue={renameValue}
                 onSelect={onSelect}
                 onRename={startRename}
+                onRenameChange={setRenameValue}
+                onRenameSubmit={submitRename}
+                onRenameCancel={() => {
+                  setRenaming(null);
+                  setRenameValue("");
+                }}
                 onDelete={onDelete}
                 projects={projects}
                 currentProjectId={null}
@@ -410,19 +408,6 @@ export default function SessionSidebar({
           <span>设置</span>
         </button>
       </div>
-
-      {/* Rename dialog */}
-      {renaming && (
-        <RenameDialog
-          value={renameValue}
-          onChange={setRenameValue}
-          onSubmit={() => submitRename(renaming!)}
-          onCancel={() => {
-            setRenaming(null);
-            setRenameValue("");
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -434,10 +419,14 @@ export default function SessionSidebar({
 interface SessionItemProps {
   sessionKey: string;
   displayName: string;
-  preview: string;
   isActive: boolean;
+  isRenaming: boolean;
+  renameValue: string;
   onSelect(key: string): void;
   onRename(key: string): void;
+  onRenameChange(value: string): void;
+  onRenameSubmit(key: string): void;
+  onRenameCancel(): void;
   onDelete(key: string): Promise<void>;
   projects: Project[];
   currentProjectId: string | null;
@@ -448,10 +437,14 @@ interface SessionItemProps {
 function SessionItem({
   sessionKey,
   displayName,
-  preview,
   isActive,
+  isRenaming,
+  renameValue,
   onSelect,
   onRename,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
   onDelete,
   projects,
   currentProjectId,
@@ -460,8 +453,13 @@ function SessionItem({
 }: SessionItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const popoverActionsRef = useRef<{ close: () => void; unmount: () => void } | null>(null);
+
+  const isCustomNamed = displayName !== sessionKey;
+  const title = isCustomNamed ? displayName : "新对话";
 
   const handleDelete = async () => {
+    popoverActionsRef.current?.close();
     setDeleting(true);
     try {
       await onDelete(sessionKey);
@@ -472,7 +470,22 @@ function SessionItem({
     }
   };
 
-  const otherProjects = projects.filter((p) => p.id !== currentProjectId);
+  const handleRename = () => {
+    popoverActionsRef.current?.close();
+    onRename(sessionKey);
+  };
+
+  const handleRemoveFromProject = () => {
+    popoverActionsRef.current?.close();
+    if (currentProjectId) {
+      onRemoveFromProject(currentProjectId, sessionKey);
+    }
+  };
+
+  const otherProjects = useMemo(
+    () => projects.filter((p) => p.id !== currentProjectId),
+    [projects, currentProjectId]
+  );
 
   return (
     <div
@@ -482,146 +495,115 @@ function SessionItem({
           : "text-ink hover:bg-muted"
       } ${deleting ? "pointer-events-none opacity-40" : ""}`}
     >
-      <button
-        className="flex min-w-0 flex-1 items-center overflow-hidden py-1.5 pl-2.5 text-left"
-        onClick={() => onSelect(sessionKey)}
-        aria-current={isActive ? "page" : undefined}
-        type="button"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12px] font-medium leading-6">
-            {displayName}
-          </div>
-          {preview && (
-            <div className="truncate text-[12px] leading-relaxed text-ink-muted">
-              {preview}
-            </div>
-          )}
-        </div>
-      </button>
-
-      <Popover
-        onOpenChange={(open) => {
-          setMenuOpen(open);
-        }}
-      >
-        <PopoverTrigger
-          render={(props) => (
-            <button
-              className={`shrink-0 rounded-md p-1 transition-all duration-fast hover:bg-muted ${
-                menuOpen || isActive
-                  ? "opacity-100"
-                  : "opacity-0 group-hover/session:opacity-100"
-              }`}
-              aria-label="Session menu"
-              type="button"
-              {...props}
+      {isRenaming ? (
+        <div className="flex min-w-0 flex-1 items-center py-1.5 pl-2.5 pr-2">
+          <div className="min-w-0 flex-1">
+            <Input
+              className="h-7 rounded-md border-line/40 bg-surface px-2 text-[12px] font-medium leading-6 shadow-none focus-visible:ring-1"
+              value={renameValue}
+              onChange={(e) => onRenameChange(e.target.value)}
+              onBlur={() => onRenameSubmit(sessionKey)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onRenameSubmit(sessionKey);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  onRenameCancel();
+                }
+              }}
+              type="text"
+              autoFocus
             />
-          )}
-        >
-          <MoreHorizontal size={13} className="text-ink-muted" />
-        </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={2}>
-          <PopoverItem onClick={() => onRename(sessionKey)}>
-            <Pencil size={13} />
-            Rename
-          </PopoverItem>
-          {otherProjects.length > 0 && (
-            <PopoverItem>
-              <FolderPlus size={13} />
-              <span>Add to project</span>
-              <div className="ml-auto flex gap-1">
-                {otherProjects.slice(0, 3).map((p) => (
-                  <button
-                    key={p.id}
-                    className="rounded-md px-1.5 py-0.5 text-[11px] transition-colors duration-fast hover:bg-muted hover:text-ink"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAddToProject(p.id, sessionKey);
-                    }}
-                    type="button"
-                    title={p.name}
-                  >
-                    {p.name.length > 8
-                      ? p.name.slice(0, 8) + "…"
-                      : p.name}
-                  </button>
-                ))}
-                {otherProjects.length > 3 && (
-                  <span className="text-[11px] text-ink-muted">
-                    +{otherProjects.length - 3}
-                  </span>
-                )}
-              </div>
-            </PopoverItem>
-          )}
-          {currentProjectId && (
-            <PopoverItem
-              onClick={() => onRemoveFromProject(currentProjectId, sessionKey)}
-            >
-              <LogOut size={13} />
-              Remove from project
-            </PopoverItem>
-          )}
-          <div className="my-1 border-t border-line/20" />
-          <PopoverItem
-            onClick={handleDelete}
-            className="text-red hover:bg-red/10"
-          >
-            <Trash2 size={13} />
-            Delete
-          </PopoverItem>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Inline rename dialog                                                */
-/* ------------------------------------------------------------------ */
-
-interface RenameDialogProps {
-  value: string;
-  onChange(value: string): void;
-  onSubmit(): void;
-  onCancel(): void;
-}
-
-function RenameDialog({ value, onChange, onSubmit, onCancel }: RenameDialogProps) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/6 backdrop-blur-[1px]">
-      <div
-        className="w-64 rounded-xl bg-surface p-3 shadow-lg ring-1 ring-line/20"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Input
-          className="mb-2.5 w-full text-[13px]"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSubmit();
-            if (e.key === "Escape") onCancel();
-          }}
-          placeholder="Session name..."
-          type="text"
-          autoFocus
-        />
-        <div className="flex justify-end gap-1.5">
-          <Button variant="ghost" size="xs" onClick={onCancel} type="button">
-            Cancel
-          </Button>
-          <Button
-            variant="default"
-            size="xs"
-            onClick={onSubmit}
-            disabled={!value.trim()}
-            type="button"
-          >
-            Save
-          </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button
+          className="flex min-w-0 flex-1 items-center overflow-hidden py-1.5 pl-2.5 text-left"
+          onClick={() => onSelect(sessionKey)}
+          aria-current={isActive ? "page" : undefined}
+          type="button"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[12px] font-medium leading-6">
+              {title}
+            </div>
+          </div>
+        </button>
+      )}
+
+      {!isRenaming && (
+        <Popover
+          actionsRef={popoverActionsRef}
+          onOpenChange={(open) => {
+            setMenuOpen(open);
+          }}
+        >
+          <PopoverTrigger
+            aria-label="Session menu"
+            className={`shrink-0 rounded-md p-1 transition-all duration-fast hover:bg-muted ${
+              menuOpen || isActive
+                ? "opacity-100"
+                : "opacity-0 group-hover/session:opacity-100"
+            }`}
+            render={(props) => (
+              <button {...props} type="button">
+                <MoreHorizontal size={13} className="text-ink-muted" />
+              </button>
+            )}
+          />
+          <PopoverContent align="start" sideOffset={2}>
+            <PopoverItem onClick={handleRename}>
+              <Pencil size={13} />
+              Rename
+            </PopoverItem>
+            {otherProjects.length > 0 && (
+              <PopoverItem>
+                <FolderPlus size={13} />
+                <span>Add to project</span>
+                <div className="ml-auto flex gap-1">
+                  {otherProjects.slice(0, 3).map((p) => (
+                    <button
+                      key={p.id}
+                      className="rounded-md px-1.5 py-0.5 text-[11px] transition-colors duration-fast hover:bg-muted hover:text-ink"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        popoverActionsRef.current?.close();
+                        onAddToProject(p.id, sessionKey);
+                      }}
+                      type="button"
+                      title={p.name}
+                    >
+                      {p.name.length > 8
+                        ? p.name.slice(0, 8) + "…"
+                        : p.name}
+                    </button>
+                  ))}
+                  {otherProjects.length > 3 && (
+                    <span className="text-[11px] text-ink-muted">
+                      +{otherProjects.length - 3}
+                    </span>
+                  )}
+                </div>
+              </PopoverItem>
+            )}
+            {currentProjectId && (
+              <PopoverItem onClick={handleRemoveFromProject}>
+                <LogOut size={13} />
+                Remove from project
+              </PopoverItem>
+            )}
+            <div className="my-1 border-t border-line/20" />
+            <PopoverItem
+              onClick={handleDelete}
+              className="text-red hover:bg-red/10"
+            >
+              <Trash2 size={13} />
+              Delete
+            </PopoverItem>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 }

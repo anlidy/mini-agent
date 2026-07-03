@@ -123,6 +123,7 @@ REST API:
 |--------|------|-------------|
 | `GET` | `/api/sessions` | List saved sessions |
 | `GET` | `/api/sessions/:key` | Read a full session |
+| `PATCH` | `/api/sessions/:key` | Update session metadata (e.g. title) |
 | `DELETE` | `/api/sessions/:key` | Delete a session JSONL file |
 | `GET` | `/api/config` | Read config with `provider.apiKey` redacted to `***` |
 | `PUT` | `/api/config` | Write provider/agent/search/exec config patches atomically |

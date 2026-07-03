@@ -53,7 +53,7 @@ describe("SessionManager", () => {
     ]);
   });
 
-  it("lists session summaries sorted by update time and previews the first user message", async () => {
+  it("lists session summaries sorted by update time and titles from the first user message", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-list-sessions-"));
     const manager = new SessionManager({ workspace });
     const alpha = await manager.getOrCreate("alpha");
@@ -72,7 +72,7 @@ describe("SessionManager", () => {
     expect(summaries[1]).toMatchObject({
       key: "alpha",
       messageCount: 2,
-      preview: "first user message that becomes the preview"
+      title: "first user message that becomes the preview"
     });
   });
 

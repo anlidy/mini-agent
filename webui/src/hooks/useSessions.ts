@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { apiDelete, apiGet } from "../api/http";
+import { apiDelete, apiGet, apiPatch } from "../api/http";
 import type { Session, SessionSummary } from "../api/types";
 
 const ACTIVE_SESSION_STORAGE_KEY = "mini-agent.activeSessionKey";
@@ -61,6 +61,8 @@ export function useSessions(defaultKey = "default") {
     [displayNames]
   );
 
+  const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const setDisplayName = useCallback((key: string, name: string): void => {
     const next = { ...readDisplayNames() };
     if (name.trim()) {
@@ -70,6 +72,15 @@ export function useSessions(defaultKey = "default") {
     }
     writeDisplayNames(next);
     setDisplayNames(next);
+    // Debounce backend persistence to avoid wasted PATCH requests during rapid typing
+    if (patchTimerRef.current) {
+      clearTimeout(patchTimerRef.current);
+    }
+    patchTimerRef.current = setTimeout(() => {
+      apiPatch(`/api/sessions/${encodeURIComponent(key)}`, { title: name.trim() }).catch(() => {
+        // Silently ignore backend persistence failures
+      });
+    }, 500);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -79,6 +90,19 @@ export function useSessions(defaultKey = "default") {
       if (mountedRef.current && requestId === refreshRequestRef.current) {
         setSessions(nextSessions);
         setError(undefined);
+        // Hydrate displayNames from backend titles for keys not already set locally
+        const existing = readDisplayNames();
+        let changed = false;
+        for (const s of nextSessions) {
+          if (s.title && !(s.key in existing)) {
+            existing[s.key] = s.title;
+            changed = true;
+          }
+        }
+        if (changed) {
+          writeDisplayNames(existing);
+          setDisplayNames({ ...existing });
+        }
       }
       return true;
     } catch (cause) {

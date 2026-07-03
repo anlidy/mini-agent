@@ -104,7 +104,7 @@ describe("server REST API", () => {
     );
 
     const list = await call(handler, "GET", "/api/sessions");
-    expect(list.json).toMatchObject([{ key: "demo", messageCount: 1, preview: "hello" }]);
+    expect(list.json).toMatchObject([{ key: "demo", messageCount: 1, title: "hello" }]);
 
     const full = await call(handler, "GET", "/api/sessions/demo");
     expect((full.json as { messages: unknown[] }).messages).toMatchObject([{ role: "user", content: "hello" }]);

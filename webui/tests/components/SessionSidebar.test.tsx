@@ -32,8 +32,8 @@ function renderWithRouter(ui: React.ReactElement) {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function sessionSummary(key: string, preview = `${key} preview`): SessionSummary {
-  return { key, createdAt: "", updatedAt: "", messageCount: 1, preview };
+function sessionSummary(key: string): SessionSummary {
+  return { key, createdAt: "", updatedAt: "", messageCount: 1, title: "" };
 }
 
 const defaultProps = {
@@ -68,12 +68,14 @@ describe("SessionSidebar", () => {
       />
     );
 
-    expect(screen.getByText("default")).toBeInTheDocument();
-    expect(screen.getByText("other")).toBeInTheDocument();
+    // Without custom display names, sessions show "新对话" as title
+    expect(screen.getAllByText("新对话")).toHaveLength(2);
   });
 
   it("highlights active session", () => {
     const sessions = [sessionSummary("default"), sessionSummary("other")];
+    const getDisplayName = (key: string) => key === "other" ? "Other Chat" : "Default Chat";
+
     renderWithRouter(
       <SessionSidebar
         {...defaultProps}
@@ -83,16 +85,19 @@ describe("SessionSidebar", () => {
         onNew={vi.fn()}
         onToggleCollapse={vi.fn()}
         orphans={["default", "other"]}
+        getDisplayName={getDisplayName}
       />
     );
 
-    const activeBtn = screen.getAllByRole("button", { name: /other/ })[0];
+    const activeBtn = screen.getByRole("button", { name: "Other Chat" });
     expect(activeBtn).toHaveAttribute("aria-current", "page");
   });
 
   it("calls onSelect when session is clicked", async () => {
     const sessions = [sessionSummary("default"), sessionSummary("other")];
     const onSelect = vi.fn();
+    const getDisplayName = (key: string) => key === "other" ? "Other Chat" : "Default Chat";
+
     renderWithRouter(
       <SessionSidebar
         {...defaultProps}
@@ -102,22 +107,23 @@ describe("SessionSidebar", () => {
         onNew={vi.fn()}
         onToggleCollapse={vi.fn()}
         orphans={["default", "other"]}
+        getDisplayName={getDisplayName}
       />
     );
 
-    const sessionBtns = screen.getAllByRole("button", { name: /other/ });
-    const selectBtn = sessionBtns.find(
-      (b) => b.getAttribute("aria-current") !== "page"
-    )!;
-    await userEvent.click(selectBtn);
+    const sessionBtn = screen.getByRole("button", { name: "Other Chat" });
+    await userEvent.click(sessionBtn);
     expect(onSelect).toHaveBeenCalledWith("other");
   });
 
   it("filters sessions by search query", async () => {
     const sessions = [
-      sessionSummary("default", "hello world"),
-      sessionSummary("other", "goodbye moon")
+      sessionSummary("default"),
+      sessionSummary("other")
     ];
+    const getDisplayName = (key: string) =>
+      key === "default" ? "hello world" : key === "other" ? "goodbye moon" : key;
+
     renderWithRouter(
       <SessionSidebar
         {...defaultProps}
@@ -127,6 +133,7 @@ describe("SessionSidebar", () => {
         onNew={vi.fn()}
         onToggleCollapse={vi.fn()}
         orphans={["default", "other"]}
+        getDisplayName={getDisplayName}
       />
     );
 
@@ -134,8 +141,8 @@ describe("SessionSidebar", () => {
     const searchInput = screen.getByPlaceholderText("搜索对话...");
     await userEvent.type(searchInput, "goodbye");
 
-    expect(screen.queryByText("default")).not.toBeInTheDocument();
-    expect(screen.getByText("other")).toBeInTheDocument();
+    expect(screen.queryByText("hello world")).not.toBeInTheDocument();
+    expect(screen.getByText("goodbye moon")).toBeInTheDocument();
   });
 
   it("shows empty state when no sessions", () => {
@@ -217,7 +224,7 @@ describe("SessionSidebar", () => {
 
     expect(screen.getByText("项目")).toBeInTheDocument();
     expect(screen.getByText("My Project")).toBeInTheDocument();
-    expect(screen.getByText("session-a")).toBeInTheDocument();
+    expect(screen.getByText("新对话")).toBeInTheDocument();
   });
 
   it("renders display name instead of session key", () => {
@@ -238,5 +245,86 @@ describe("SessionSidebar", () => {
     );
 
     expect(screen.getByText("Fancy Name")).toBeInTheDocument();
+  });
+
+  it("renames a session from the session menu", async () => {
+    const sessions = [sessionSummary("session-a")];
+    const onRename = vi.fn();
+
+    renderWithRouter(
+      <SessionSidebar
+        {...defaultProps}
+        sessions={sessions}
+        activeKey="session-a"
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onRename={onRename}
+        orphans={["session-a"]}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Session menu" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = await screen.findByRole("textbox");
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    await userEvent.clear(input);
+    await userEvent.type(input, "Renamed session");
+    await userEvent.keyboard("{Enter}");
+
+    expect(onRename).toHaveBeenCalledWith("session-a", "Renamed session");
+  });
+
+  it("cancels inline rename with escape", async () => {
+    const sessions = [sessionSummary("session-a")];
+    const onRename = vi.fn();
+
+    renderWithRouter(
+      <SessionSidebar
+        {...defaultProps}
+        sessions={sessions}
+        activeKey="session-a"
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onRename={onRename}
+        orphans={["session-a"]}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Session menu" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = await screen.findByRole("textbox");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Discarded name");
+    await userEvent.keyboard("{Escape}");
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue("Discarded name")).not.toBeInTheDocument();
+    expect(screen.getByText("新对话")).toBeInTheDocument();
+  });
+
+  it("deletes a session from the session menu", async () => {
+    const sessions = [sessionSummary("session-a")];
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+
+    renderWithRouter(
+      <SessionSidebar
+        {...defaultProps}
+        sessions={sessions}
+        activeKey="session-a"
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onDelete={onDelete}
+        orphans={["session-a"]}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Session menu" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onDelete).toHaveBeenCalledWith("session-a");
   });
 });

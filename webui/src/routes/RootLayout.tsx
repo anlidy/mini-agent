@@ -68,7 +68,7 @@ export default function RootLayout() {
 
   // Create a new session immediately and navigate to it
   const handleNewSession = useCallback(() => {
-    const sessionKey = `session-${crypto.randomUUID()}`;
+    const sessionKey = crypto.randomUUID();
     handleSessionSelect(sessionKey);
   }, [handleSessionSelect]);
 

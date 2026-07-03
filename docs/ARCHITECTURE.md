@@ -69,6 +69,7 @@ REST routes:
 |---|---|---|
 | `GET` | `/api/sessions` | `SessionManager.listSessions()` |
 | `GET` | `/api/sessions/:key` | `SessionManager.getOrCreate()` |
+| `PATCH` | `/api/sessions/:key` | Update session title (404 if missing) |
 | `DELETE` | `/api/sessions/:key` | `SessionManager.deleteSession()` |
 | `GET` | `/api/config` | redacted in-memory config |
 | `PUT` | `/api/config` | `writeConfig()` + in-memory version bump |
@@ -173,7 +174,8 @@ JSONL-based persistence with atomic writes:
 - History trimming by message count and character budget
 - Drops leading tool messages so trimmed history never starts with an orphan tool result
 - Missing or invalid metadata headers fail the load instead of guessing legacy formats
-- Session listing returns `{ key, createdAt, updatedAt, messageCount, preview }[]`
+- Session listing returns `{ key, createdAt, updatedAt, messageCount, title }[]`
+- `SessionManager.get(key)` returns `Session | undefined` without auto-creating; `getOrCreate(key)` still creates on miss
 - Session deletion removes the JSONL file and clears the in-memory cache entry
 
 ### ContextBuilder (`src/agent/ContextBuilder.ts`)

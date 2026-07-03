@@ -19,7 +19,7 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
-  preview: string;
+  title: string;
 }
 
 interface ParsedSessionFile {
@@ -36,6 +36,19 @@ export class SessionManager {
     const workspace = options?.workspace ?? process.cwd();
     this.sessionsDir = options?.sessionsDir ?? path.join(workspace, ".mini-agent", "workspace", "sessions");
     this.source = options?.source ?? "unknown";
+  }
+
+  async get(key: string): Promise<Session | undefined> {
+    const existing = this.sessions.get(key);
+    if (existing) {
+      return existing;
+    }
+    const loaded = await this.loadSession(key);
+    if (loaded) {
+      this.sessions.set(key, loaded);
+      return loaded;
+    }
+    return undefined;
   }
 
   async getOrCreate(key: string): Promise<Session> {
@@ -99,7 +112,7 @@ export class SessionManager {
           createdAt: parsed.header.created_at,
           updatedAt: parsed.header.updated_at,
           messageCount: parsed.messages.length,
-          preview: previewMessage(parsed.messages)
+          title: typeof parsed.header.metadata.title === "string" ? parsed.header.metadata.title : titleFromMessages(parsed.messages)
         };
       }));
 
@@ -224,10 +237,6 @@ function isSessionHeader(value: unknown): value is SessionHeader {
     (value as Record<string, unknown>).metadata !== null &&
     !Array.isArray((value as Record<string, unknown>).metadata)
   );
-}
-
-function previewMessage(messages: MessageRecord[]): string {
-  return titleFromMessages(messages);
 }
 
 function toModelMessage(message: Session["messages"][number]): Record<string, unknown> {

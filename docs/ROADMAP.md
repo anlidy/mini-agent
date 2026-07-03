@@ -132,7 +132,12 @@ native `http` server and a small WebSocket adapter, not Express.
   restrained amber accent (≤10%), Geist typeface, barely-there borders, sidebar
   collapse animation, icon-only collapsed sidebar state. Design tokens live in
   `webui/src/styles.css` and `webui/tailwind.config.ts`; authority in `DESIGN.md`
-  and `PRODUCT.md`. 19 test files, 116 cases.
+  and `PRODUCT.md`. 19 test files, 119 cases.
+- [x] Session UX polish (2026-07-03): bare UUID session keys (no prefix),
+  inline rename in sidebar, display name backend persistence with localStorage
+  recovery, `PATCH /api/sessions/:key` endpoint, `SessionManager.get()`.
+- [x] `SessionSummary` cleanup (2026-07-03): removed `preview` field; `title`
+  is canonical, falls back to first user message when no custom title set.
 - [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
 - [ ] Dark mode (light mode complete with full design tokens; dark deferred)
 - [ ] Token usage and performance panel

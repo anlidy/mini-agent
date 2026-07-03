@@ -53,11 +53,12 @@ function PopoverContent({
         side={side}
         align={align}
         sideOffset={sideOffset}
+        className="z-50"
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "z-50 min-w-[160px] rounded-xl bg-surface p-1.5 text-sm text-ink shadow-lg ring-1 ring-line/25 outline-none",
+            "min-w-[160px] rounded-xl bg-surface p-1.5 text-sm text-ink shadow-lg ring-1 ring-line/25 outline-none",
             "origin-[var(--transform-origin)]",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

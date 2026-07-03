@@ -183,8 +183,8 @@ describe("App (with router)", () => {
         if (path === "/api/sessions") {
           return new Response(
             JSON.stringify([
-              { key: "default", createdAt: "", updatedAt: "", messageCount: 0, preview: "" },
-              { key: "other", createdAt: "", updatedAt: "", messageCount: 2, preview: "other prompt" }
+              { key: "default", createdAt: "", updatedAt: "", messageCount: 0, title: "" },
+              { key: "other", createdAt: "", updatedAt: "", messageCount: 2, title: "other prompt" }
             ]),
             { status: 200 }
           );
@@ -225,7 +225,7 @@ describe("App (with router)", () => {
 
     render(<RouterProvider router={createTestRouter()} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: /other/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "other prompt" }));
 
     expect(await screen.findByText("other answer")).toBeInTheDocument();
     expect(screen.getAllByText("other prompt").length).toBeGreaterThan(0);
