@@ -16,6 +16,7 @@ export type AgentDoneResult = {
 export type ServerMessage =
   | { type: "session"; key: string }
   | { type: "token"; text: string }
+  | { type: "thinking"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; status: "ok" | "error"; content: string }
   | { type: "done"; result: AgentDoneResult }

@@ -9,13 +9,18 @@ export interface ConfigState {
   update(config: Config): void;
 }
 
+/** Redact all provider API keys in the config for safe transport to the client. */
 export function redactConfig(config: Config): Config {
+  const redactedProviders: Record<string, typeof config.providers[string]> = {};
+  for (const [key, provider] of Object.entries(config.providers)) {
+    redactedProviders[key] = {
+      ...provider,
+      ...(provider.apiKey ? { apiKey: REDACTED_API_KEY } : {})
+    };
+  }
   return {
     ...config,
-    provider: {
-      ...config.provider,
-      ...(config.provider.apiKey ? { apiKey: REDACTED_API_KEY } : {})
-    }
+    providers: redactedProviders
   };
 }
 

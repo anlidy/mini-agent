@@ -42,6 +42,7 @@ export class OpenAIProvider implements LLMProvider {
 
     return {
       content: contentField(message),
+      reasoningContent: reasoningField(message),
       toolCalls: parseToolCalls(message),
       finishReason: normalizeFinishReason(choice.finish_reason),
       usage: numericRecord(objectField(body, "usage"))
@@ -54,6 +55,31 @@ export class OpenAIProvider implements LLMProvider {
       throw new Error("OpenAI-compatible streaming response had no body");
     }
     yield* parseSseStream(response.body);
+  }
+
+  async listModels(): Promise<string[]> {
+    const response = await this.fetchImpl(`${this.baseUrl}/models`, {
+      method: "GET",
+      headers: {
+        "authorization": `Bearer ${this.apiKey}`,
+        "content-type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}: ${await response.text()}`);
+    }
+    const body = await response.json() as Record<string, unknown>;
+    const data = body.data;
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((item: unknown) => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return (item as Record<string, unknown>).id;
+        }
+        return undefined;
+      })
+      .filter((id: unknown): id is string => typeof id === "string")
+      .sort();
   }
 
   /**
@@ -70,6 +96,7 @@ export class OpenAIProvider implements LLMProvider {
     const signal = request.signal
       ? AbortSignal.any([request.signal, timeoutController.signal])
       : timeoutController.signal;
+    const reasoningEffort = resolveReasoningEffort(request.thinking, request.effort);
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
@@ -83,7 +110,8 @@ export class OpenAIProvider implements LLMProvider {
           model: request.model ?? this.model,
           messages: request.messages,
           ...(request.tools ? { tools: request.tools } : {}),
-          ...(stream ? { stream: true } : {})
+          ...(stream ? { stream: true } : {}),
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
         })
       });
     } catch (error) {
@@ -128,6 +156,37 @@ function objectField(source: Record<string, unknown>, key: string): Record<strin
 function contentField(message: Record<string, unknown>): string | null {
   return typeof message.content === "string" ? message.content : null;
 }
+
+function reasoningField(message: Record<string, unknown>): string | null {
+  return typeof message.reasoning_content === "string" ? message.reasoning_content : null;
+}
+
+/**
+ * Map agent-level effort (1-4) to OpenAI reasoning_effort values.
+ * 1 = auto (no parameter), 2 = low, 3 = medium, 4 = high.
+ */
+function resolveReasoningEffort(
+  thinking: ChatRequest["thinking"],
+  effort: ChatRequest["effort"]
+): string | undefined {
+  if (thinking?.enabled) {
+    // When thinking is explicitly enabled, use a default medium effort unless
+    // effort overrides it.
+    const effectiveEffort = effort ?? 3;
+    return EFFORT_MAP[effectiveEffort];
+  }
+  if (effort && effort > 1) {
+    return EFFORT_MAP[effort];
+  }
+  return undefined;
+}
+
+const EFFORT_MAP: Record<number, string | undefined> = {
+  1: undefined,
+  2: "minimal",
+  3: "medium",
+  4: "high"
+};
 
 function parseToolCalls(message: Record<string, unknown>): ToolCallRequest[] {
   if (!Array.isArray(message.tool_calls)) {
@@ -194,6 +253,7 @@ async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncIterable<
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  let reasoningContent = "";
   let finishReason: unknown;
   let usage: Record<string, number> = {};
   const fragments = new Map<number, ToolCallFragment>();
@@ -205,6 +265,9 @@ async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncIterable<
     const delta = objectField(choice, "delta");
     if (typeof delta.content === "string" && delta.content.length > 0) {
       content += delta.content;
+    }
+    if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) {
+      reasoningContent += delta.reasoning_content;
     }
     accumulateToolCallFragments(fragments, delta.tool_calls);
     if (choice.finish_reason != null) {
@@ -236,7 +299,11 @@ async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncIterable<
           break;
         }
         const before = content;
+        const reasoningBefore = reasoningContent;
         handlePayload(payload);
+        if (reasoningContent.length > reasoningBefore.length) {
+          yield { type: "reasoning", content: reasoningContent.slice(reasoningBefore.length) };
+        }
         if (content.length > before.length) {
           yield { type: "delta", content: content.slice(before.length) };
         }
@@ -250,6 +317,7 @@ async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncIterable<
     type: "done",
     response: {
       content: content.length > 0 ? content : null,
+      reasoningContent: reasoningContent.length > 0 ? reasoningContent : null,
       toolCalls: assembleToolCalls(fragments),
       finishReason: normalizeFinishReason(finishReason),
       usage

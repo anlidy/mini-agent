@@ -2,8 +2,9 @@ import path from "node:path";
 
 import { ContextBuilder } from "./ContextBuilder.js";
 import { AgentRunner, type AgentRunSpec, type AgentRunResult } from "./AgentRunner.js";
+import type { Config } from "../config/Config.js";
 import { ensureDefaultConfig } from "../config/loadConfig.js";
-import { OpenAIProvider } from "../providers/OpenAIProvider.js";
+import { createProvider } from "../providers/factory.js";
 import { SessionManager } from "../session/SessionManager.js";
 import { SkillsLoader } from "../skills/SkillsLoader.js";
 import { createDefaultToolRegistry } from "../tools/index.js";
@@ -13,7 +14,6 @@ import type { LLMProvider } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import type { MessageRecord, Session } from "../session/Session.js";
 
-/** Per-turn state shared between run() and stream(). */
 interface PreparedRun {
   runner: AgentRunner;
   spec: AgentRunSpec;
@@ -25,28 +25,31 @@ interface PreparedRun {
 }
 
 export class AgentLoop implements Agent {
-  /** Config directory (.mini-agent) — used for config loading and fallback workspace. */
   readonly configDir: string;
-  readonly model?: string;
-  readonly maxIterations?: number;
-  private readonly maxToolResultChars?: number;
-  private readonly provider?: LLMProvider;
+  private readonly config?: Config;
+  private readonly agentKey: string;
+  private readonly modelOverride?: string;
+  private readonly maxIterationsOverride?: number;
+  private readonly maxToolResultCharsOverride?: number;
+  private readonly providerOverride?: LLMProvider;
   private readonly tools: ToolRegistry;
   private readonly approveCommand?: (command: string) => Promise<boolean> | boolean;
   private sessions?: SessionManager;
-  private readonly sessionsDir?: string;
+  private readonly sessionsDirOverride?: string;
   private readonly defaultSessionKey?: string;
   private readonly sessionSource?: string;
 
   constructor(options: AgentOptions = {}) {
     this.configDir = options.workspace ?? path.join(process.cwd(), ".mini-agent");
-    this.model = options.model;
-    this.maxIterations = options.maxIterations;
-    this.maxToolResultChars = options.maxToolResultChars;
-    this.provider = options.provider;
+    this.config = options.config;
+    this.agentKey = options.agentKey ?? "default";
+    this.providerOverride = options.provider;
+    this.modelOverride = options.model;
+    this.maxIterationsOverride = options.maxIterations;
+    this.maxToolResultCharsOverride = options.maxToolResultChars;
     this.tools = options.tools ?? createDefaultToolRegistry();
     this.approveCommand = options.approveCommand;
-    this.sessionsDir = options.sessionsDir;
+    this.sessionsDirOverride = options.sessionsDir;
     this.sessions = options.sessions;
     this.defaultSessionKey = options.sessionKey;
     this.sessionSource = options.sessionSource;
@@ -73,24 +76,29 @@ export class AgentLoop implements Agent {
     }
   }
 
-  /** Build session, provider, context, and the runner spec shared by run/stream. */
   private async prepare(input: string, options: RunOptions): Promise<PreparedRun> {
-    const config = await ensureDefaultConfig(this.configDir);
-    const sessionKey = options.sessionKey ?? this.defaultSessionKey ?? config.sessions.defaultKey;
+    const config = this.config ?? await ensureDefaultConfig(this.configDir);
+    const agentConfig = config.agents[this.agentKey];
+    if (!agentConfig) {
+      throw new Error(
+        `Unknown agent "${this.agentKey}". Available agents: ${Object.keys(config.agents).join(", ")}.`
+      );
+    }
+
+    const sessionKey = options.sessionKey ?? this.defaultSessionKey ?? "default";
     const sessions = this.sessionManager(config.sessions.dir);
     const session = await sessions.getOrCreate(sessionKey);
+
     // Per-session workspace from metadata; falls back to configDir.
     const rawWorkspace = (typeof session.metadata.workspace === "string" && session.metadata.workspace)
       ? session.metadata.workspace
       : this.configDir;
     const sessionWorkspace = path.resolve(path.resolve(this.configDir), rawWorkspace);
-    const model = this.model ?? config.provider.model ?? "deepseek-chat";
-    const provider = this.provider ?? new OpenAIProvider({
-      apiKey: this.resolveApiKey(config.provider.apiKey),
-      baseUrl: config.provider.baseUrl,
-      model,
-      timeoutMs: config.provider.timeoutMs
-    });
+
+    const model = this.modelOverride ?? agentConfig.model;
+
+    const provider = this.providerOverride ?? createProvider(agentConfig, config.providers);
+
     const context = new ContextBuilder({ workspace: sessionWorkspace });
     const skills = new SkillsLoader(sessionWorkspace);
     const initialMessages = await context.buildMessages({
@@ -102,30 +110,39 @@ export class AgentLoop implements Agent {
       }),
       skillsSummary: await skills.summaryText()
     });
+
     const spec: AgentRunSpec = {
       initialMessages,
       tools: this.tools,
       model,
-      maxIterations: this.maxIterations ?? config.agent.maxIterations,
-      maxToolResultChars: this.maxToolResultChars ?? config.agent.maxToolResultChars,
+      maxIterations: this.maxIterationsOverride ?? agentConfig.maxIterations,
+      maxToolResultChars: this.maxToolResultCharsOverride ?? agentConfig.maxToolResultChars,
       workspace: sessionWorkspace,
-      contextWindowTokens: config.agent.contextWindowTokens,
+      contextWindowTokens: agentConfig.contextWindowTokens,
+      thinking: agentConfig.thinking,
+      effort: agentConfig.effort,
       approveCommand: options.approveCommand ?? this.approveCommand,
       signal: options.signal
     };
+
     return { runner: new AgentRunner(provider), spec, sessions, session, sessionKey, input, initialMessages };
   }
 
-  /** Append the turn's messages to the session and persist it. */
   private async persist(prepared: PreparedRun, result: AgentRunResult): Promise<void> {
     prepared.session.messages.push(toRecord({ role: "user", content: prepared.input }));
     for (const message of result.messages.slice(prepared.initialMessages.length)) {
       prepared.session.messages.push(toRecord(message));
     }
+    // Attach reasoning content to the last assistant message if present.
+    if (result.reasoningContent) {
+      const lastAssistant = findLastAssistantMessage(prepared.session.messages);
+      if (lastAssistant) {
+        lastAssistant.thinking = result.reasoningContent;
+      }
+    }
     await prepared.sessions.save(prepared.session);
   }
 
-  /** Shape the RunResult returned to callers of run(). */
   private finish(prepared: PreparedRun, result: AgentRunResult): RunResult {
     return {
       content: result.finalContent ?? "",
@@ -138,27 +155,11 @@ export class AgentLoop implements Agent {
   private sessionManager(configSessionsDir: string): SessionManager {
     if (!this.sessions) {
       this.sessions = new SessionManager({
-        sessionsDir: this.sessionsDir ?? configSessionsDir,
+        sessionsDir: this.sessionsDirOverride ?? configSessionsDir,
         source: this.sessionSource
       });
     }
     return this.sessions;
-  }
-
-  /**
-   * Resolve the provider API key from config or the MINI_AGENT_API_KEY env var.
-   * Fails fast with an actionable message instead of letting the first HTTP
-   * request return an opaque 401. Only reached when no provider was injected.
-   */
-  private resolveApiKey(configured?: string): string {
-    const apiKey = configured ?? process.env.MINI_AGENT_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "Missing provider API key. Set provider.apiKey in .mini-agent/config.json " +
-        "or the MINI_AGENT_API_KEY environment variable."
-      );
-    }
-    return apiKey;
   }
 }
 
@@ -181,5 +182,17 @@ function toRecord(message: Record<string, unknown>): MessageRecord {
   if (message.tool_calls) {
     record.tool_calls = message.tool_calls;
   }
+  if (typeof message.thinking === "string") {
+    record.thinking = message.thinking;
+  }
   return record;
+}
+
+function findLastAssistantMessage(messages: MessageRecord[]): MessageRecord | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === "assistant") {
+      return messages[i];
+    }
+  }
+  return undefined;
 }

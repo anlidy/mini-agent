@@ -1,15 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { apiPatch } from "../api/http";
 import ChatThread from "../components/ChatThread";
+import type { ModelConfig } from "../components/Composer";
 import type { RootContext } from "./types";
 
 export default function ChatPage() {
-  const { sessions, config, socket, activeKey, toggleRight, isRightCollapsed, defaultWorkspace } = useOutletContext<RootContext>();
+  const { sessions, config, socket, activeKey, toggleRight, isRightCollapsed, defaultWorkspace, lastChatKey } = useOutletContext<RootContext>();
+  const navigate = useNavigate();
 
   const [workspace, setWorkspace] = useState(defaultWorkspace);
   const [workspacePatched, setWorkspacePatched] = useState(false);
+
+  // Derive model config from config
+  const agents = config.config?.agents ?? {};
+  const providers = config.config?.providers ?? {};
+  const defaultAgent = agents["default"];
+
+  const [modelConfig, setModelConfig] = useState<ModelConfig>({
+    agentKey: "default",
+    provider: defaultAgent?.provider ?? "",
+    model: defaultAgent?.model ?? "",
+    thinking: defaultAgent?.thinking?.enabled ?? false,
+    effort: defaultAgent?.effort ?? 1
+  });
+
+  // Sync model config when config loads/changes
+  useEffect(() => {
+    if (defaultAgent) {
+      setModelConfig({
+        agentKey: "default",
+        provider: defaultAgent.provider,
+        model: defaultAgent.model,
+        thinking: defaultAgent.thinking.enabled,
+        effort: defaultAgent.effort
+      });
+    }
+  }, [defaultAgent?.provider, defaultAgent?.model, defaultAgent?.thinking?.enabled, defaultAgent?.effort]);
 
   // Initialize workspace from active session metadata
   useEffect(() => {
@@ -49,6 +77,12 @@ export default function ChatPage() {
     [activeKey, sessions.activeSession?.messages?.length, socket, workspace, workspacePatched, defaultWorkspace]
   );
 
+  const handleOpenSettings = useCallback(() => {
+    navigate(`/settings/${encodeURIComponent(activeKey)}`, {
+      state: { from: location.pathname }
+    });
+  }, [navigate, activeKey]);
+
   return (
     <ChatThread
       sessionKey={activeKey}
@@ -64,10 +98,13 @@ export default function ChatPage() {
       onAbort={socket.abort}
       onToggleRight={toggleRight}
       isRightCollapsed={isRightCollapsed}
-      models={config.config?.provider?.model ? [config.config.provider.model] : undefined}
-      currentModel={config.config?.provider?.model}
       workspacePath={workspace}
       onWorkspaceChange={handleWorkspaceChange}
+      agents={agents}
+      providers={providers}
+      currentConfig={modelConfig}
+      onConfigChange={setModelConfig}
+      onOpenSettings={handleOpenSettings}
     />
   );
 }

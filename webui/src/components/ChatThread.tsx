@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, PanelRightClose, PanelRightOpen } from "lucide-react";
 
-import type { MessageRecord } from "../api/types";
+import type { AgentConfig, MessageRecord, ProviderConfig } from "../api/types";
 import type { ApprovalRequest, StreamSegment } from "../hooks/useAgentSocket";
 import { buildTimeline, extractToolSteps, renderContent } from "../lib/timeline";
 import ApprovalCard from "./ApprovalCard";
 import { Button } from "./ui/button";
-import Composer from "./Composer";
+import Composer, { type ModelConfig } from "./Composer";
 import TimelineRenderer from "./TimelineRenderer";
 
 /* ------------------------------------------------------------------ */
@@ -27,11 +27,14 @@ interface ChatThreadProps {
   onAbort(): void;
   onToggleRight?(): void;
   isRightCollapsed?: boolean;
-  models?: string[];
-  currentModel?: string;
-  onModelChange?(model: string): void;
   workspacePath?: string;
   onWorkspaceChange?(path: string): void;
+  /* ---- model config ---- */
+  agents?: Record<string, AgentConfig>;
+  providers?: Record<string, ProviderConfig>;
+  currentConfig?: ModelConfig;
+  onConfigChange?(config: ModelConfig): void;
+  onOpenSettings?(): void;
 }
 
 export default function ChatThread(props: ChatThreadProps) {
@@ -84,11 +87,13 @@ export default function ChatThread(props: ChatThreadProps) {
       active={props.active}
       aborting={props.aborting}
       onAbort={props.onAbort}
-      models={props.models}
-      currentModel={props.currentModel}
-      onModelChange={props.onModelChange}
       workspacePath={props.workspacePath}
       onWorkspaceChange={props.onWorkspaceChange}
+      agents={props.agents}
+      providers={props.providers}
+      currentConfig={props.currentConfig}
+      onConfigChange={props.onConfigChange}
+      onOpenSettings={props.onOpenSettings}
       onSend={async (text) => {
         const accepted = await props.onSend(text);
         if (accepted) {

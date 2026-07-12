@@ -1,3 +1,4 @@
+import type { Config } from "../config/Config.js";
 import type { LLMProvider } from "../providers/Provider.js";
 import type { SessionManager } from "../session/SessionManager.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
@@ -5,18 +6,22 @@ import type { AgentEvent } from "./events.js";
 
 export interface AgentOptions {
   workspace?: string;
-  model?: string;
-  maxIterations?: number;
-  maxToolResultChars?: number;
+  /** Full config. When provided, the agent is built from config.agents[agentKey]. */
+  config?: Config;
+  /** Which agent to use from config.agents. Defaults to "default". */
+  agentKey?: string;
+  /** Override provider (for testing or when config is not available). */
   provider?: LLMProvider;
+  /** Override model. */
+  model?: string;
+  /** Override max iterations. */
+  maxIterations?: number;
+  /** Override max tool result chars. */
+  maxToolResultChars?: number;
   tools?: ToolRegistry;
   sessionKey?: string;
   sessionsDir?: string;
   sessionSource?: string;
-  /**
-   * Shared SessionManager. When provided, the loop reads and writes through this
-   * instance instead of creating its own, so HTTP reads and WS writes stay in sync.
-   */
   sessions?: SessionManager;
   approveCommand?: (command: string) => Promise<boolean> | boolean;
 }

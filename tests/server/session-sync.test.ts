@@ -19,11 +19,11 @@ class StreamingProvider implements LLMProvider {
     return "sync-model";
   }
   async chat(): Promise<LLMResponse> {
-    return { content: this.text, toolCalls: [], finishReason: "stop", usage: {} };
+    return { content: this.text, reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} };
   }
   async *chatStream(_request: ChatRequest): AsyncIterable<ProviderStreamEvent> {
     yield { type: "delta", content: this.text };
-    yield { type: "done", response: { content: this.text, toolCalls: [], finishReason: "stop", usage: {} } };
+    yield { type: "done", response: { content: this.text, reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} } };
   }
 }
 
@@ -76,7 +76,7 @@ class FakeSocket implements AgentSocket {
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
   const config = defaultConfig(path.join(workspace, ".mini-agent"));
-  config.provider.apiKey = "secret-key";
+  config.providers.deepseek!.apiKey = "secret-key";
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
   await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
   return createRequestHandler({ workspace });

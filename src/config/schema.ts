@@ -2,10 +2,6 @@ import { z } from "zod";
 
 import type { Config } from "./Config.js";
 
-/**
- * Thrown when `.mini-agent/config.json` fails schema validation. Carries the
- * underlying zod issues so callers can render a readable, path-qualified message.
- */
 export class ConfigValidationError extends Error {
   constructor(message: string, readonly issues: z.core.$ZodIssue[]) {
     super(message);
@@ -13,28 +9,39 @@ export class ConfigValidationError extends Error {
   }
 }
 
-const providerSchema = z
+const thinkingSchema = z
   .object({
-    name: z.string().optional(),
-    apiKey: z.string().optional(),
-    baseUrl: z.string().optional(),
-    model: z.string().optional(),
-    timeoutMs: z.number().int().positive().optional()
+    enabled: z.boolean().default(false),
+    budgetTokens: z.number().int().positive().default(16_000)
   })
   .strict();
 
-const agentSchema = z
+const agentConfigSchema = z
   .object({
+    provider: z.string(),
+    model: z.string(),
+    thinking: thinkingSchema.prefault({}),
+    effort: z.number().int().min(1).max(4).default(1),
     maxIterations: z.number().int().positive().default(100),
     maxToolResultChars: z.number().int().positive().default(64_000),
-    contextWindowTokens: z.number().int().positive().optional()
+    contextWindowTokens: z.number().int().positive().optional(),
+    params: z.record(z.string(), z.unknown()).default({})
+  })
+  .strict();
+
+const providerConfigSchema = z
+  .object({
+    type: z.enum(["openai", "anthropic"]),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+    timeoutMs: z.number().int().positive().optional(),
+    models: z.array(z.string()).optional()
   })
   .strict();
 
 const sessionsSchema = z
   .object({
     dir: z.string(),
-    defaultKey: z.string().default("default"),
     maxHistoryMessages: z.number().int().positive().default(50),
     maxHistoryChars: z.number().int().positive().default(200_000)
   })
@@ -55,22 +62,31 @@ const execSchema = z
   })
   .strict();
 
+const toolsSchema = z
+  .object({
+    search: searchSchema.optional(),
+    exec: execSchema.optional()
+  })
+  .strict();
+
 function configSchema(configDir: string) {
   return z
     .object({
-      provider: providerSchema.prefault({}),
-      agent: agentSchema.prefault({}),
+      agents: z.record(z.string(), agentConfigSchema).refine(
+        (agents) => Object.keys(agents).length > 0,
+        "At least one agent must be configured"
+      ),
+      providers: z.record(z.string(), providerConfigSchema).refine(
+        (providers) => Object.keys(providers).length > 0,
+        "At least one provider must be configured"
+      ),
       sessions: sessionsSchema.prefault({ dir: `${configDir}/workspace/sessions` }),
-      search: searchSchema.optional(),
-      exec: execSchema.optional()
+      tools: toolsSchema.prefault({})
     })
     .strict();
 }
 
-/**
- * Validate and normalize a raw config object, applying defaults for any omitted
- * fields. Throws {@link ConfigValidationError} with all issues on failure.
- */
+/** Validate and normalize a raw config object. */
 export function parseConfig(raw: unknown, configDir: string): Config {
   const result = configSchema(configDir).safeParse(raw ?? {});
   if (!result.success) {
@@ -82,7 +98,6 @@ export function parseConfig(raw: unknown, configDir: string): Config {
   return result.data as Config;
 }
 
-/** Render a ConfigValidationError (or any error) as a readable string. */
 export function formatConfigError(error: unknown): string {
   if (error instanceof ConfigValidationError) {
     return error.message;

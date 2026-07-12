@@ -76,6 +76,20 @@ export function useAgentSocket(sessionKey: string, options: UseAgentSocketOption
       return;
     }
 
+    if (message.type === "thinking") {
+      setSegments((current) =>
+        appendToolStep(current, {
+          id: `thinking-${generationRef.current}-${++nextTextIdRef.current}`,
+          kind: "thinking",
+          title: "thinking",
+          status: "ok",
+          detail: message.text,
+          detailKind: "result"
+        })
+      );
+      return;
+    }
+
     if (message.type === "tool_call") {
       setSegments((current) =>
         appendToolStep(current, {

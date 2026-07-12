@@ -1,6 +1,8 @@
 export interface MessageRecord {
   role: string;
   content: unknown;
+  /** Thinking / chain-of-thought content from the assistant. */
+  thinking?: string;
   tool_call_id?: string;
   name?: string;
   tool_calls?: unknown;

@@ -11,12 +11,11 @@ describe("config loading", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-config-"));
     const config = await ensureDefaultConfig(path.join(workspace, ".mini-agent"));
 
-    expect(config.provider).toMatchObject({
-      name: "deepseek",
-      baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-chat"
+    expect(config.providers.deepseek).toMatchObject({
+      baseUrl: "https://api.deepseek.com/v1"
     });
-    expect(config.provider.apiKey).toBeUndefined();
+    expect(config.agents.default!.model).toBe("deepseek-chat");
+    expect(config.providers.deepseek!.apiKey).toBeUndefined();
 
     const configPath = path.join(workspace, ".mini-agent", "config.json");
     const raw = await readFile(configPath, "utf8");

@@ -47,7 +47,7 @@ class NonStreamingProvider implements LLMProvider {
 }
 
 function llmResponse(partial: Partial<LLMResponse>): LLMResponse {
-  return { content: null, toolCalls: [], finishReason: "stop", usage: {}, ...partial };
+  return { content: null, reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {}, ...partial };
 }
 
 function makeRegistry(): ToolRegistry {

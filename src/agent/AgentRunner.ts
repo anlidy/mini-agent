@@ -1,4 +1,4 @@
-import { shouldExecuteToolCalls, type LLMProvider, type LLMResponse, type ToolCallRequest } from "../providers/Provider.js";
+import { shouldExecuteToolCalls, type LLMProvider, type LLMResponse, type ThinkingConfig, type ToolCallRequest } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import { AgentHook, type AgentHookContext } from "./hooks.js";
 import { HeuristicTokenCounter, estimateMessagesTokens, estimateMessageTokens, type TokenCounter } from "./tokens.js";
@@ -17,12 +17,16 @@ export interface AgentRunSpec {
   contextWindowTokens?: number;
   compactToolResultsKeepRecent?: number;
   tokenCounter?: TokenCounter;
+  thinking?: ThinkingConfig;
+  effort?: 1 | 2 | 3 | 4;
   approveCommand?: (command: string) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }
 
 export interface AgentRunResult {
   finalContent: string | null;
+  /** Aggregated reasoning / thinking content from the model. */
+  reasoningContent: string | null;
   messages: AgentMessage[];
   toolsUsed: string[];
   usage: Record<string, number>;
@@ -58,12 +62,13 @@ export class AgentRunner {
     const toolsUsed: string[] = [];
     const usage: Record<string, number> = {};
     const toolEvents: AgentRunResult["toolEvents"] = [];
+    let reasoningContent = "";
     let emptyFinalRetries = 0;
     let truncatedToolCallRecoveries = 0;
 
     for (let iteration = 0; iteration < spec.maxIterations; iteration += 1) {
       if (spec.signal?.aborted) {
-        yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents) };
+        yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents, reasoningContent) };
         return;
       }
       const hookContext: AgentHookContext = {
@@ -78,7 +83,7 @@ export class AgentRunner {
         response = yield* this.streamResponse(spec, messages, streaming);
       } catch (error) {
         if (spec.signal?.aborted) {
-          yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents) };
+          yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents, reasoningContent) };
           return;
         }
         const finalContent = `Error calling LLM: ${error instanceof Error ? error.message : String(error)}`;
@@ -90,12 +95,17 @@ export class AgentRunner {
         yield { type: "error", error: finalContent };
         yield {
           type: "done",
-          result: { finalContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
+          result: { finalContent, reasoningContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
         };
         return;
       }
 
       accumulateUsage(usage, response.usage);
+      if (response.reasoningContent) {
+        reasoningContent = reasoningContent
+          ? `${reasoningContent}\n${response.reasoningContent}`
+          : response.reasoningContent;
+      }
       hookContext.response = response;
       hookContext.usage = { ...response.usage };
       hookContext.toolCalls = [...response.toolCalls];
@@ -119,7 +129,7 @@ export class AgentRunner {
         yield { type: "error", error: finalContent };
         yield {
           type: "done",
-          result: { finalContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
+          result: { finalContent, reasoningContent, messages, toolsUsed, usage, stopReason: "error", error: finalContent, toolEvents }
         };
         return;
       }
@@ -167,7 +177,7 @@ export class AgentRunner {
       await hook.afterIteration(hookContext);
       yield {
         type: "done",
-        result: { finalContent, messages, toolsUsed, usage, stopReason: "completed", toolEvents }
+        result: { finalContent, reasoningContent, messages, toolsUsed, usage, stopReason: "completed", toolEvents }
       };
       return;
     }
@@ -176,7 +186,7 @@ export class AgentRunner {
     messages.push({ role: "assistant", content: finalContent });
     yield {
       type: "done",
-      result: { finalContent, messages, toolsUsed, usage, stopReason: "max_iterations", toolEvents }
+      result: { finalContent, reasoningContent, messages, toolsUsed, usage, stopReason: "max_iterations", toolEvents }
     };
   }
 
@@ -191,7 +201,9 @@ export class AgentRunner {
       messages: prepareMessagesForModel(messages, spec),
       tools: spec.tools.getDefinitions(),
       model: spec.model,
-      signal: spec.signal
+      signal: spec.signal,
+      thinking: spec.thinking,
+      effort: spec.effort
     };
     if (streaming && typeof this.provider.chatStream === "function") {
       let assembled: LLMResponse | undefined;
@@ -199,6 +211,10 @@ export class AgentRunner {
         if (event.type === "delta") {
           if (event.content.length > 0) {
             yield { type: "token", text: event.content };
+          }
+        } else if (event.type === "reasoning") {
+          if (event.content.length > 0) {
+            yield { type: "thinking", text: event.content };
           }
         } else {
           assembled = event.response;
@@ -224,10 +240,12 @@ function abortedResult(
   messages: AgentMessage[],
   toolsUsed: string[],
   usage: Record<string, number>,
-  toolEvents: AgentRunResult["toolEvents"]
+  toolEvents: AgentRunResult["toolEvents"],
+  reasoningContent: string
 ): AgentRunResult {
   return {
     finalContent: ABORTED_MESSAGE,
+    reasoningContent,
     messages,
     toolsUsed,
     usage,

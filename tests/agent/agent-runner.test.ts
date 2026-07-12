@@ -27,6 +27,7 @@ class ScriptedProvider implements LLMProvider {
 function response(partial: Partial<LLMResponse>): LLMResponse {
   return {
     content: null,
+    reasoningContent: null,
     toolCalls: [],
     finishReason: "stop",
     usage: {},

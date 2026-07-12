@@ -28,6 +28,17 @@ export function extractToolSteps(messages: MessageRecord[]): ParsedToolStep[] {
   const steps = new Map<string, ParsedToolStep>();
 
   for (const msg of messages) {
+    // Extract thinking steps from assistant messages with thinking content.
+    if (msg.role === "assistant" && typeof msg.thinking === "string" && msg.thinking) {
+      const thinkingId = `thinking-${msg.timestamp}`;
+      steps.set(thinkingId, {
+        id: thinkingId,
+        title: "thinking",
+        status: "ok",
+        result: msg.thinking
+      });
+    }
+
     if (msg.role === "assistant" && msg.tool_calls) {
       const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [msg.tool_calls];
       for (const call of calls) {
@@ -125,6 +136,24 @@ export function buildTimeline(
       }
 
       if (msg.role === "assistant") {
+        // Emit thinking item before text content if present.
+        if (typeof msg.thinking === "string" && msg.thinking) {
+          const thinkingId = `thinking-${msg.timestamp}`;
+          if (!opts?.skipLiveIds?.has(thinkingId)) {
+            dest.push({
+              kind: "tool",
+              id: thinkingId,
+              step: {
+                id: thinkingId,
+                kind: "thinking",
+                title: "thinking",
+                status: "ok",
+                detail: msg.thinking,
+                detailKind: "result"
+              }
+            });
+          }
+        }
         if (typeof msg.content === "string" && msg.content.trim()) {
           dest.push({
             kind: "assistant",

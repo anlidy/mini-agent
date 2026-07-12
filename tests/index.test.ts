@@ -14,6 +14,7 @@ describe("package entrypoint", () => {
       async chat() {
         return {
           content: "hello from provider",
+          reasoningContent: null,
           toolCalls: [],
           finishReason: "stop",
           usage: {}

@@ -140,10 +140,26 @@ interface LLMProvider {
   defaultModel(): string;
   chat(request: ChatRequest): Promise<LLMResponse>;
   chatStream?(request: ChatRequest): AsyncIterable<ProviderStreamEvent>;
+  /** Fetch the list of available models from the provider API. */
+  listModels?(): Promise<string[]>;
 }
 ```
 
-Implemented by `OpenAIProvider` — works with any OpenAI-compatible API (DeepSeek, OpenAI, etc.). It parses Server-Sent Events for `chatStream`, accumulating fragmented tool calls by index, and shares one request path with `chat` that composes the caller's `AbortSignal` with an internal timeout.
+**OpenAIProvider** — OpenAI-compatible API (DeepSeek, OpenAI, etc.). Parses SSE for
+`chatStream`, accumulates fragmented tool calls by index. Shares one request path
+with `chat` that composes the caller's `AbortSignal` with an internal timeout.
+
+**AnthropicProvider** — Anthropic Messages API with extended thinking support.
+Converts OpenAI-format messages to Anthropic's native content-block format:
+system messages merged into top-level `system` param, tool messages wrapped as
+`tool_result` blocks, assistant tool_calls expanded into `tool_use` blocks.
+Maps agent effort (1–4) to Anthropic thinking budget tokens (4K/4K/16K/32K).
+Parses SSE content blocks (`text_delta`/`thinking_delta`/`input_json_delta`) and
+assembles tool use fragments by block index into complete ToolCallRequests.
+
+Both providers implement `listModels()`: GET `<baseUrl>/models`, parse the
+response's `data[].id` field, sort alphabetically. OpenAIProvider uses Bearer
+auth; AnthropicProvider uses `x-api-key` + `anthropic-version` headers.
 
 Key design rule: Provider returns tool call requests, it never executes them.
 

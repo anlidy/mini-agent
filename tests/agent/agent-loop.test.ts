@@ -33,6 +33,7 @@ class ScriptedProvider implements LLMProvider {
 function response(partial: Partial<LLMResponse>): LLMResponse {
   return {
     content: null,
+    reasoningContent: null,
     toolCalls: [],
     finishReason: "stop",
     usage: {},
@@ -77,7 +78,7 @@ describe("AgentLoop", () => {
   it("uses provider settings from config.jsonconfig.json when no provider is injected", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-config-"));
     const config = defaultConfig(path.join(workspace, ".mini-agent"));
-    config.provider.apiKey = "config-file-key";
+    config.providers.deepseek!.apiKey = "config-file-key";
     config.sessions.dir = path.join(workspace, ".mini-agent", "custom-sessions");
     await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
     await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config)}\n`, "utf8");
@@ -145,7 +146,7 @@ describe("AgentLoop", () => {
       async *chatStream(): AsyncIterable<ProviderStreamEvent> {
         yield { type: "delta", content: "Hel" };
         yield { type: "delta", content: "lo" };
-        yield { type: "done", response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: {} } };
+        yield { type: "done", response: { content: "Hello", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} } };
       }
     };
     const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, sessionKey: "stream" });
@@ -174,8 +175,8 @@ describe("AgentLoop", () => {
     const configPath = path.join(workspace, ".mini-agent", "config.json");
     const writeMaxIterations = async (maxIterations: number): Promise<void> => {
       const config = defaultConfig(path.join(workspace, ".mini-agent"));
-      config.provider.apiKey = "k";
-      config.agent.maxIterations = maxIterations;
+      config.providers.deepseek!.apiKey = "k";
+      config.agents.default!.maxIterations = maxIterations;
       await writeFile(configPath, `${JSON.stringify(config)}\n`, "utf8");
     };
 

@@ -13,11 +13,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 function configBody() {
   return {
     workspace: ".",
-    provider: { name: "deepseek", model: "deepseek-chat" },
-    agent: { maxIterations: 10, maxToolResultChars: 12000 },
-    sessions: { dir: ".mini-agent/sessions", defaultKey: "default", maxHistoryMessages: 100, maxHistoryChars: 200000 },
-    search: { backend: "none", maxResults: 5 },
-    exec: { enabled: false, timeoutMs: 30000, maxOutputChars: 32000 }
+    providers: { deepseek: { type: "openai" as const, apiKey: "sk-test" } },
+    agents: { default: { provider: "deepseek", model: "deepseek-chat", thinking: { enabled: false, budgetTokens: 16000 }, effort: 1, maxIterations: 10, maxToolResultChars: 12000, params: {} } },
+    sessions: { dir: ".mini-agent/sessions", maxHistoryMessages: 100, maxHistoryChars: 200000 },
+    tools: {
+      search: { backend: "none", maxResults: 5 },
+      exec: { enabled: false, timeoutMs: 30000, maxOutputChars: 32000 }
+    }
   };
 }
 
@@ -43,7 +45,7 @@ describe("useConfig", () => {
     const { result } = renderHook(() => useConfig());
 
     await waitFor(() => expect(result.current.config).toBeDefined());
-    expect(result.current.config?.provider.name).toBe("deepseek");
+    expect(result.current.config?.providers.deepseek?.type).toBe("openai");
     expect(result.current.tools).toHaveLength(1);
     expect(result.current.tools[0]!.function.name).toBe("read_file");
   });
@@ -52,7 +54,9 @@ describe("useConfig", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/config" && init?.method === "PUT") {
-        return jsonResponse({ ...configBody(), provider: { ...configBody().provider, model: "new-model" } });
+        const updated = configBody();
+        updated.agents.default.model = "new-model";
+        return jsonResponse(updated);
       }
       if (path === "/api/config") return jsonResponse(configBody());
       if (path === "/api/tools") return jsonResponse([]);
@@ -65,11 +69,11 @@ describe("useConfig", () => {
 
     let ok = false;
     await act(async () => {
-      ok = await result.current.save({ provider: { model: "new-model" } });
+      ok = await result.current.save({ agents: { default: { model: "new-model" } } } as any);
     });
 
     expect(ok).toBe(true);
-    expect(result.current.config?.provider.model).toBe("new-model");
+    expect(result.current.config?.agents.default?.model).toBe("new-model");
   });
 
   it("handles fetch errors", async () => {

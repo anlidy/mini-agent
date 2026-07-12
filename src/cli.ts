@@ -8,7 +8,7 @@ import type { Readable, Writable } from "node:stream";
 import { AgentLoop } from "./agent/AgentLoop.js";
 import { ensureDefaultConfig } from "./config/loadConfig.js";
 import { ConfigValidationError } from "./config/schema.js";
-import { OpenAIProvider } from "./providers/OpenAIProvider.js";
+import { createProvider } from "./providers/factory.js";
 import { SessionManager } from "./session/SessionManager.js";
 import { createDefaultToolRegistry } from "./tools/index.js";
 import type { ToolRegistry } from "./tools/ToolRegistry.js";
@@ -26,7 +26,6 @@ export interface RunCliOptions {
   output?: NodeJS.WritableStream;
 }
 
-/** Mutable per-session REPL state shared by the loop, commands, and SIGINT. */
 interface ReplContext {
   agent: AgentLoop;
   registry: ToolRegistry;
@@ -54,12 +53,23 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
     throw error;
   }
-  // CLI-SETUP-MARKER
+
+  const agentKey = "default";
+  const agentConfig = config.agents[agentKey];
+  if (!agentConfig) {
+    await writeOutput(output, `Error: no "${agentKey}" agent configured.\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   const sessionManager = new SessionManager({ sessionsDir: config.sessions.dir, source: "cli" });
   const session = await sessionManager.getOrCreate(args.session);
 
-  await writeOutput(output, `mini-agent (${config.provider.name ?? "provider"}:${config.provider.model ?? "model"}) session=${args.session}\n`);
+  const providerName = agentConfig.provider;
+  const providerConfig = config.providers[providerName];
+  await writeOutput(output, `mini-agent agent=${agentKey} provider=${providerName}(${providerConfig?.type ?? "?"}) model=${agentConfig.model} session=${args.session}\n`);
   await writeOutput(output, "Type /help for commands.\n");
+
   if (args.resume) {
     await writeOutput(output, `Resumed session ${args.session}\n`);
     for (const message of session.messages) {
@@ -69,26 +79,14 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
   }
 
-  const registry = createDefaultToolRegistry({ search: config.search, exec: config.exec });
-  // NOTE: maxIterations / maxToolResultChars are intentionally NOT passed here.
-  // AgentLoop is constructed once for the whole REPL session, so any constructor
-  // value would be a startup snapshot that AgentLoop.prepare()'s `?? config…`
-  // fallback can never override. Omitting them lets prepare() re-read these from
-  // .mini-agent/config.json every turn, so editing the file takes effect on the
-  // next message without restarting the REPL.
+  const registry = createDefaultToolRegistry({ search: config.tools.search, exec: config.tools.exec });
   const agent = new AgentLoop({
     workspace: configDir,
+    config,
+    agentKey,
     sessionKey: args.session,
-    sessionsDir: config.sessions.dir,
     sessionSource: "cli",
-    model: config.provider.model,
-    tools: registry,
-    provider: new OpenAIProvider({
-      apiKey: config.provider.apiKey ?? "",
-      baseUrl: config.provider.baseUrl,
-      model: config.provider.model ?? "deepseek-chat",
-      timeoutMs: config.provider.timeoutMs
-    })
+    tools: registry
   });
 
   const ctx: ReplContext = {
@@ -101,7 +99,6 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   };
 
   const rl = readline.createInterface({ input: input as Readable, output: output as Writable });
-  // Ctrl-C aborts the in-flight turn if one is running; otherwise it exits.
   rl.on("SIGINT", () => {
     if (ctx.abort && !ctx.abort.signal.aborted) {
       ctx.abort.abort();
@@ -133,7 +130,6 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     await flushStdout(output);
   }
 }
-// CLI-BODY-MARKER
 
 const HELP_TEXT = [
   "Commands:",
@@ -145,15 +141,10 @@ const HELP_TEXT = [
   "Run with --stream to see tokens live."
 ].join("\n");
 
-/** Returns true when the REPL should stop. */
 async function handleLine(line: string, ctx: ReplContext): Promise<boolean> {
   const text = line.trim();
-  if (!text) {
-    return false;
-  }
-  if (text === "/exit" || text === "/quit") {
-    return true;
-  }
+  if (!text) return false;
+  if (text === "/exit" || text === "/quit") return true;
   if (text === "/help") {
     await writeOutput(ctx.output, `${HELP_TEXT}\n`);
     return false;
@@ -207,7 +198,6 @@ async function handleToolCommand(rest: string, ctx: ReplContext): Promise<void> 
   const result = await ctx.registry.execute(name, args, { workspace: ctx.workspace });
   await writeOutput(ctx.output, `${typeof result === "string" ? result : JSON.stringify(result)}\n`);
 }
-// CLI-HANDLERS-MARKER
 
 async function handleRunLine(text: string, ctx: ReplContext): Promise<boolean> {
   ctx.abort = new AbortController();
@@ -236,6 +226,8 @@ async function handleStreamingLine(text: string, ctx: ReplContext): Promise<bool
     for await (const event of ctx.agent.stream(text, { sessionKey: ctx.sessionKey, signal: ctx.abort.signal })) {
       if (event.type === "token") {
         await writeOutput(ctx.output, event.text);
+      } else if (event.type === "thinking") {
+        await writeOutput(ctx.output, `\n[thinking] ${event.text}\n`);
       } else if (event.type === "tool_call") {
         toolsUsed.push(event.name);
       } else if (event.type === "done") {
@@ -258,9 +250,7 @@ async function handleStreamingLine(text: string, ctx: ReplContext): Promise<bool
 
 function formatUsage(usage: Record<string, number>): string {
   const entries = Object.entries(usage).filter(([, value]) => Number.isFinite(value) && value > 0);
-  if (entries.length === 0) {
-    return "";
-  }
+  if (entries.length === 0) return "";
   return entries.map(([key, value]) => `${key}=${value}`).join(" ");
 }
 
@@ -308,4 +298,3 @@ function hasWritableNeedDrain(output: NodeJS.WritableStream): output is NodeJS.W
 function isTty(input: NodeJS.ReadableStream): boolean {
   return "isTTY" in input && input.isTTY === true;
 }
-

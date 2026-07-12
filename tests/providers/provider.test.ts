@@ -34,6 +34,7 @@ describe("provider finish reasons", () => {
   it("requires both tool calls and a tool-capable finish reason", () => {
     expect(shouldExecuteToolCalls({
       content: null,
+      reasoningContent: null,
       toolCalls: [{ id: "call_1", name: "read_file", arguments: {} }],
       finishReason: "tool_calls",
       usage: {}
@@ -41,6 +42,7 @@ describe("provider finish reasons", () => {
 
     expect(shouldExecuteToolCalls({
       content: null,
+      reasoningContent: null,
       toolCalls: [{ id: "call_1", name: "read_file", arguments: {} }],
       finishReason: "length",
       usage: {}
@@ -48,6 +50,7 @@ describe("provider finish reasons", () => {
 
     expect(shouldExecuteToolCalls({
       content: "done",
+      reasoningContent: null,
       toolCalls: [],
       finishReason: "tool_calls",
       usage: {}

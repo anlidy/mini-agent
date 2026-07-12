@@ -8,46 +8,56 @@ describe("config schema validation", () => {
   it("accepts the generated default config", () => {
     const workspace = "/tmp/ws";
     const parsed = parseConfig(defaultConfig(path.join(workspace, ".mini-agent")), workspace);
-    expect(parsed.provider.model).toBe("deepseek-chat");
-    expect(parsed.agent.maxIterations).toBe(100);
+    expect(parsed.agents.default!.model).toBe("deepseek-chat");
+    expect(parsed.agents.default!.maxIterations).toBe(100);
   });
 
   it("fills defaults for omitted optional sections", () => {
-    const parsed = parseConfig({ provider: { apiKey: "sk-test" } }, "/tmp/ws");
-    expect(parsed.provider.apiKey).toBe("sk-test");
-    expect(parsed.agent.maxIterations).toBeGreaterThan(0);
-    expect(parsed.sessions.defaultKey).toBe("default");
+    const parsed = parseConfig({
+      providers: { deepseek: { type: "openai", apiKey: "sk-test" } },
+      agents: { default: { provider: "deepseek", model: "deepseek-chat" } }
+    }, "/tmp/ws");
+    expect(parsed.providers.deepseek!.apiKey).toBe("sk-test");
+    expect(parsed.agents.default!.maxIterations).toBeGreaterThan(0);
+    expect(parsed.sessions.maxHistoryMessages).toBe(50);
   });
 
   it("rejects wrong types with a readable aggregated message", () => {
-    expect(() => parseConfig({ agent: { maxIterations: "lots" } }, "/tmp/ws"))
+    expect(() => parseConfig({ agents: { default: { maxIterations: "lots" } } }, "/tmp/ws"))
       .toThrow(ConfigValidationError);
     try {
-      parseConfig({ agent: { maxIterations: "lots" } }, "/tmp/ws");
+      parseConfig({ agents: { default: { maxIterations: "lots" } } }, "/tmp/ws");
     } catch (error) {
       const message = formatConfigError(error);
-      expect(message).toContain("agent.maxIterations");
+      expect(message).toContain("agents.default.maxIterations");
     }
   });
 
   it("rejects negative numeric bounds", () => {
-    expect(() => parseConfig({ agent: { maxIterations: 0 } }, "/tmp/ws"))
+    expect(() => parseConfig({ agents: { default: { maxIterations: 0 } } }, "/tmp/ws"))
       .toThrow(ConfigValidationError);
   });
 
   it("rejects a non-string apiKey", () => {
-    expect(() => parseConfig({ provider: { apiKey: 123 } }, "/tmp/ws"))
+    expect(() => parseConfig({ providers: { deepseek: { type: "openai", apiKey: 123 } } }, "/tmp/ws"))
       .toThrow(ConfigValidationError);
   });
 
   it("accepts an optional search backend block", () => {
-    const parsed = parseConfig({ search: { backend: "duckduckgo", maxResults: 5 } }, "/tmp/ws");
-    expect(parsed.search?.backend).toBe("duckduckgo");
-    expect(parsed.search?.maxResults).toBe(5);
+    const parsed = parseConfig({
+      providers: { deepseek: { type: "openai" } },
+      agents: { default: { provider: "deepseek", model: "deepseek-chat" } },
+      tools: { search: { backend: "duckduckgo", maxResults: 5 } }
+    }, "/tmp/ws");
+    expect(parsed.tools.search?.backend).toBe("duckduckgo");
+    expect(parsed.tools.search?.maxResults).toBe(5);
   });
 
   it("rejects an unknown search backend", () => {
-    expect(() => parseConfig({ search: { backend: "bing" } }, "/tmp/ws"))
-      .toThrow(ConfigValidationError);
+    expect(() => parseConfig({
+      providers: { deepseek: { type: "openai" } },
+      agents: { default: { provider: "deepseek", model: "deepseek-chat" } },
+      tools: { search: { backend: "bing" } }
+    }, "/tmp/ws")).toThrow(ConfigValidationError);
   });
 });

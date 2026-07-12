@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { ChevronDown, FolderOpen, Send, Square } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -8,6 +8,15 @@ import {
   PopoverItem,
   PopoverTrigger,
 } from "./ui/popover";
+import type { AgentConfig, ProviderConfig } from "../api/types";
+
+export interface ModelConfig {
+  agentKey: string;
+  provider: string;
+  model: string;
+  thinking: boolean;
+  effort: 1 | 2 | 3 | 4;
+}
 
 interface ComposerProps {
   disabled: boolean;
@@ -17,13 +26,23 @@ interface ComposerProps {
   onChange(value: string): void;
   onSend(text: string): void;
   onAbort?(): void;
-  models?: string[];
-  currentModel?: string;
-  onModelChange?(model: string): void;
   workspacePath?: string;
   onWorkspaceChange?(path: string): void;
   placeholder?: string;
+  /* ---- model config ---- */
+  agents?: Record<string, AgentConfig>;
+  providers?: Record<string, ProviderConfig>;
+  currentConfig?: ModelConfig;
+  onConfigChange?(config: ModelConfig): void;
+  onOpenSettings?(): void;
 }
+
+const EFFORT_LABELS: Record<number, string> = {
+  1: "自动",
+  2: "低",
+  3: "中",
+  4: "高"
+};
 
 export default function Composer({
   disabled,
@@ -33,14 +52,17 @@ export default function Composer({
   onChange,
   onSend,
   onAbort,
-  models,
-  currentModel,
-  onModelChange,
   workspacePath,
   onWorkspaceChange,
   placeholder = "问任何问题...",
+  agents,
+  providers,
+  currentConfig,
+  onConfigChange,
+  onOpenSettings,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [expandedRow, setExpandedRow] = useState<"provider" | "model" | "thinking" | null>(null);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -55,6 +77,11 @@ export default function Composer({
     if (!trimmed || disabled) return;
     onSend(trimmed);
   }
+
+  const agentKeys = Object.keys(agents ?? {});
+  const hasConfig = agentKeys.length > 0 && providers && onConfigChange && currentConfig;
+  const isAnthropic = providers?.[currentConfig?.provider ?? ""]?.type === "anthropic";
+  const modelList = providers?.[currentConfig?.provider ?? ""]?.models ?? [];
 
   return (
     <div className="bg-background px-4 py-3">
@@ -133,8 +160,8 @@ export default function Composer({
             Enter 发送 · Shift+Enter 换行
           </span>
 
-          {/* Model selector */}
-          {models && models.length > 0 && onModelChange ? (
+          {/* Model config popover */}
+          {hasConfig ? (
             <Popover>
               <PopoverTrigger
                 render={(props) => (
@@ -145,30 +172,159 @@ export default function Composer({
                     className="gap-1 text-[12px] text-ink-muted hover:text-ink"
                     {...props}
                   >
-                    <span className="max-w-[100px] truncate">
-                      {currentModel || models[0]}
+                    <span className="max-w-[140px] truncate">
+                      {currentConfig.model}
                     </span>
                     <ChevronDown size={11} />
                   </Button>
                 )}
               />
-              <PopoverContent align="end" side="top" sideOffset={8}>
-                {models.map((model) => (
-                  <PopoverItem
-                    key={model}
-                    onClick={() => onModelChange(model)}
+              <PopoverContent align="end" side="top" sideOffset={8} className="w-72 p-3">
+                <div className="space-y-1">
+                  {/* Row 1: Provider */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRow(expandedRow === "provider" ? null : "provider")}
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13px] hover:bg-muted transition-colors duration-fast"
                   >
-                    <span className={model === (currentModel || models[0]) ? "font-semibold text-ink" : ""}>
-                      {model}
+                    <span>
+                      <span className="text-ink-muted">Provider: </span>
+                      <span className="text-ink font-medium">{currentConfig.provider}</span>
                     </span>
-                  </PopoverItem>
-                ))}
+                    <ChevronDown size={11} className={`text-ink-muted transition-transform duration-fast ${expandedRow === "provider" ? "rotate-180" : ""}`} />
+                  </button>
+                  {expandedRow === "provider" && (
+                    <div className="mx-1 mb-1 rounded-lg bg-muted/50 px-2 py-2 space-y-0.5">
+                      {Object.entries(providers).map(([key, p]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => {
+                            onConfigChange({
+                              ...currentConfig,
+                              provider: key,
+                              thinking: p.type === "anthropic" ? currentConfig.thinking : false
+                            });
+                            setExpandedRow(null);
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-fast ${
+                            currentConfig.provider === key
+                              ? "bg-accent/10 text-accent font-medium"
+                              : "text-ink hover:bg-surface"
+                          }`}
+                        >
+                          <span className={`h-2.5 w-2.5 rounded-full border-2 shrink-0 ${
+                            currentConfig.provider === key ? "border-accent bg-accent" : "border-line/50"
+                          }`} />
+                          {key}
+                          <span className="text-[11px] text-ink-muted">({p.type})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Row 2: Model */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRow(expandedRow === "model" ? null : "model")}
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13px] hover:bg-muted transition-colors duration-fast"
+                  >
+                    <span>
+                      <span className="text-ink-muted">Model: </span>
+                      <span className="text-ink font-medium">{currentConfig.model}</span>
+                    </span>
+                    <ChevronDown size={11} className={`text-ink-muted transition-transform duration-fast ${expandedRow === "model" ? "rotate-180" : ""}`} />
+                  </button>
+                  {expandedRow === "model" && (
+                    <div className="mx-1 mb-1 rounded-lg bg-muted/50 px-2 py-2 space-y-2">
+                      <input
+                        className="h-8 w-full rounded-lg border border-line/30 bg-surface px-2.5 text-[13px] outline-none transition-colors duration-fast focus-visible:border-accent/50 font-mono"
+                        value={currentConfig.model}
+                        onChange={(e) => onConfigChange({ ...currentConfig, model: e.target.value })}
+                        placeholder="model name"
+                        type="text"
+                      />
+                      {modelList.length > 0 && (
+                        <div className="space-y-0.5">
+                          {modelList.map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => {
+                                onConfigChange({ ...currentConfig, model: m });
+                                setExpandedRow(null);
+                              }}
+                              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-fast ${
+                                currentConfig.model === m
+                                  ? "bg-accent/10 text-accent font-medium"
+                                  : "text-ink hover:bg-surface"
+                              }`}
+                            >
+                              <span className={`h-2.5 w-2.5 rounded-full border-2 shrink-0 ${
+                                currentConfig.model === m ? "border-accent bg-accent" : "border-line/50"
+                              }`} />
+                              <span className="font-mono truncate">{m}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Row 3: Thinking + Effort */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRow(expandedRow === "thinking" ? null : "thinking")}
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13px] hover:bg-muted transition-colors duration-fast"
+                  >
+                    <span>
+                      <span className="text-ink-muted">Thinking · </span>
+                      <span className="text-ink font-medium">{EFFORT_LABELS[currentConfig.effort]}</span>
+                    </span>
+                    <ChevronDown size={11} className={`text-ink-muted transition-transform duration-fast ${expandedRow === "thinking" ? "rotate-180" : ""}`} />
+                  </button>
+                  {expandedRow === "thinking" && (
+                    <div className="mx-1 mb-1 rounded-lg bg-muted/50 px-2 py-2 space-y-2">
+                      {isAnthropic && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-ink-muted">Thinking</span>
+                          <label className="relative inline-flex cursor-pointer items-center">
+                            <input
+                              checked={currentConfig.thinking}
+                              onChange={(e) =>
+                                onConfigChange({ ...currentConfig, thinking: e.target.checked })
+                              }
+                              type="checkbox"
+                              className="peer sr-only"
+                            />
+                            <div className="h-5 w-9 rounded-full bg-muted peer-checked:bg-accent peer-focus:outline-none transition-colors duration-fast after:absolute after:start-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform after:duration-fast peer-checked:after:translate-x-full" />
+                          </label>
+                        </div>
+                      )}
+                      <div className="grid gap-1.5">
+                        <span className="text-[11px] font-medium text-ink-muted">Effort</span>
+                        <div className="flex gap-1">
+                          {([1, 2, 3, 4] as const).map((level) => (
+                            <button
+                              key={level}
+                              type="button"
+                              onClick={() => onConfigChange({ ...currentConfig, effort: level })}
+                              className={`flex-1 rounded-md py-1 text-[12px] font-medium transition-colors duration-fast ${
+                                currentConfig.effort === level
+                                  ? "bg-accent text-white"
+                                  : "bg-muted text-ink-muted hover:bg-muted/80"
+                              }`}
+                            >
+                              {EFFORT_LABELS[level]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
-          ) : models && models.length > 0 ? (
-            <span className="inline-flex max-w-[120px] items-center rounded-md px-2 text-[12px] text-ink-muted">
-              <span className="truncate">{currentModel || models[0]}</span>
-            </span>
           ) : null}
 
           {/* Send / Abort button */}

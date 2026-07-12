@@ -10,6 +10,7 @@ export interface SessionSummary {
 export interface MessageRecord {
   role: string;
   content: unknown;
+  thinking?: string;
   tool_call_id?: string;
   name?: string;
   tool_calls?: unknown;
@@ -37,33 +38,44 @@ export interface FileContent {
   content: string;
 }
 
+export interface AgentConfig {
+  provider: string;
+  model: string;
+  thinking: { enabled: boolean; budgetTokens: number };
+  effort: 1 | 2 | 3 | 4;
+  maxIterations: number;
+  maxToolResultChars: number;
+  contextWindowTokens?: number;
+  params: Record<string, unknown>;
+}
+
+export interface ProviderConfig {
+  type: "openai" | "anthropic";
+  apiKey?: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+  /** Curated list of available model IDs for this provider. */
+  models?: string[];
+}
+
 export interface Config {
-  provider: {
-    name?: string;
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-    timeoutMs?: number;
-  };
-  agent: {
-    maxIterations: number;
-    maxToolResultChars: number;
-    contextWindowTokens?: number;
-  };
+  agents: Record<string, AgentConfig>;
+  providers: Record<string, ProviderConfig>;
   sessions: {
     dir: string;
-    defaultKey: string;
     maxHistoryMessages: number;
     maxHistoryChars: number;
   };
-  search?: {
-    backend: "duckduckgo" | "none";
-    maxResults: number;
-  };
-  exec?: {
-    enabled: boolean;
-    timeoutMs: number;
-    maxOutputChars: number;
+  tools: {
+    search?: {
+      backend: "duckduckgo" | "none";
+      maxResults: number;
+    };
+    exec?: {
+      enabled: boolean;
+      timeoutMs: number;
+      maxOutputChars: number;
+    };
   };
 }
 

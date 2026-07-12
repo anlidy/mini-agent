@@ -64,12 +64,12 @@ describe("CLI REPL", () => {
     await import("node:fs/promises").then((fs) => fs.mkdir(path.join(workspace, ".mini-agent"), { recursive: true }));
     await writeFile(
       path.join(workspace, ".mini-agent", "config.json"),
-      JSON.stringify({ provider: { apiKey: "test-key" } }) + "\n"
+      JSON.stringify({ providers: { deepseek: { type: "openai", apiKey: "test-key" } } }) + "\n"
     );
     vi.spyOn(OpenAIProvider.prototype, "chatStream").mockImplementation(async function* (): AsyncIterable<ProviderStreamEvent> {
       yield { type: "delta", content: "Strea" };
       yield { type: "delta", content: "ming!" };
-      yield { type: "done", response: { content: "Streaming!", toolCalls: [], finishReason: "stop", usage: { total_tokens: 4 } } };
+      yield { type: "done", response: { content: "Streaming!", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: { total_tokens: 4 } } };
     });
 
     const input = new PassThrough();
@@ -121,11 +121,11 @@ describe("CLI REPL", () => {
     await import("node:fs/promises").then((fs) => fs.mkdir(path.join(workspace, ".mini-agent"), { recursive: true }));
     await writeFile(
       path.join(workspace, ".mini-agent", "config.json"),
-      JSON.stringify({ agent: { maxIterations: "lots" } }) + "\n"
+      JSON.stringify({ agents: { default: { maxIterations: "lots" } } }) + "\n"
     );
     const text = await runRepl(workspace, "");
     expect(text).toContain("Config error");
-    expect(text).toContain("agent.maxIterations");
+    expect(text).toContain("agents.default.maxIterations");
     expect(text).not.toContain("at ensureDefaultConfig");
   });
 });

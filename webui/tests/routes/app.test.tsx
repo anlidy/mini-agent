@@ -251,11 +251,13 @@ describe("App (with router)", () => {
           return new Response(
             JSON.stringify({
               workspace: ".",
-              provider: { name: "deepseek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-              agent: { maxIterations: 10, maxToolResultChars: 12000 },
-              sessions: { dir: ".mini-agent/sessions", defaultKey: "default", maxHistoryMessages: 100, maxHistoryChars: 200000 },
-              search: { backend: "none", maxResults: 5 },
-              exec: { enabled: false, timeoutMs: 30000, maxOutputChars: 32000 }
+              providers: { deepseek: { type: "openai", baseUrl: "https://api.deepseek.com/v1" } },
+              agents: { default: { provider: "deepseek", model: "deepseek-chat", thinking: { enabled: false, budgetTokens: 16000 }, effort: 1, maxIterations: 10, maxToolResultChars: 12000, params: {} } },
+              sessions: { dir: ".mini-agent/sessions", maxHistoryMessages: 100, maxHistoryChars: 200000 },
+              tools: {
+                search: { backend: "none", maxResults: 5 },
+                exec: { enabled: false, timeoutMs: 30000, maxOutputChars: 32000 }
+              }
             }),
             { status: 200 }
           );
@@ -272,6 +274,6 @@ describe("App (with router)", () => {
     // Settings page should be visible
     expect(await screen.findByText("Provider")).toBeInTheDocument();
     expect(screen.getAllByText("Agent").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Tools")).toBeInTheDocument();
+    expect(screen.getAllByText("Tools").length).toBeGreaterThanOrEqual(1);
   });
 });

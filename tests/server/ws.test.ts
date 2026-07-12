@@ -17,7 +17,7 @@ class StreamingProvider implements LLMProvider {
   constructor(private readonly script: ProviderStreamEvent[] = [
     { type: "delta", content: "Hel" },
     { type: "delta", content: "lo" },
-    { type: "done", response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: {} } }
+    { type: "done", response: { content: "Hello", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} } }
   ]) {}
 
   defaultModel(): string {
@@ -25,7 +25,7 @@ class StreamingProvider implements LLMProvider {
   }
 
   async chat(): Promise<LLMResponse> {
-    return { content: "chat", toolCalls: [], finishReason: "stop", usage: {} };
+    return { content: "chat", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} };
   }
 
   async *chatStream(request: ChatRequest): AsyncIterable<ProviderStreamEvent> {
@@ -82,8 +82,8 @@ class FakeSocket implements AgentSocket {
 
 async function setup(workspace: string, provider: LLMProvider): Promise<FakeSocket> {
   const config = defaultConfig(path.join(workspace, ".mini-agent"));
-  config.provider.apiKey = "test-key";
-  config.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
+  config.providers.deepseek!.apiKey = "test-key";
+  config.tools.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
   await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
   const state: ConfigState = {
@@ -109,7 +109,7 @@ describe("server WebSocket API", () => {
   it("creates bare UUID session keys for new websocket sessions", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-key-"));
     const config = defaultConfig(path.join(workspace, ".mini-agent"));
-    config.provider.apiKey = "test-key";
+    config.providers.deepseek!.apiKey = "test-key";
     await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
     await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
     const state: ConfigState = {
@@ -165,7 +165,7 @@ describe("server WebSocket API", () => {
     const provider: LLMProvider = {
       defaultModel: () => "approval-model",
       async chat(): Promise<LLMResponse> {
-        return { content: "unused", toolCalls: [], finishReason: "stop", usage: {} };
+        return { content: "unused", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} };
       },
       async *chatStream(): AsyncIterable<ProviderStreamEvent> {
         calls += 1;
@@ -174,6 +174,7 @@ describe("server WebSocket API", () => {
             type: "done",
             response: {
               content: null,
+              reasoningContent: null,
               finishReason: "tool_calls",
               toolCalls: [{ id: "call_1", name: "exec", arguments: { command: "echo approved" } }],
               usage: {}
@@ -182,7 +183,7 @@ describe("server WebSocket API", () => {
         } else {
           yield {
             type: "done",
-            response: { content: "finished", toolCalls: [], finishReason: "stop", usage: {} }
+            response: { content: "finished", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} }
           };
         }
       }

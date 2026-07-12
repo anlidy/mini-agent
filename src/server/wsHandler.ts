@@ -152,12 +152,11 @@ function buildAgent(
   const config = options.state.config;
   return new AgentLoop({
     workspace: options.workspace,
+    config,
     sessionKey,
-    sessionsDir: config.sessions.dir,
-    sessionSource: "webui",
     sessions: options.sessions,
-    model: config.provider.model,
-    tools: createDefaultToolRegistry({ search: config.search, exec: config.exec }),
+    sessionSource: "webui",
+    tools: createDefaultToolRegistry({ search: config.tools.search, exec: config.tools.exec }),
     provider: options.providerFactory?.(config),
     approveCommand
   });

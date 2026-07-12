@@ -2,6 +2,9 @@ export { createAgent } from "./agent/AgentLoop.js";
 export { AgentLoop } from "./agent/AgentLoop.js";
 export type { Agent, AgentOptions, RunResult } from "./agent/types.js";
 export { defaultConfig, ensureDefaultConfig, loadConfig } from "./config/loadConfig.js";
+export type { AgentConfig, Config, ProviderConfig } from "./config/Config.js";
+export { AnthropicProvider } from "./providers/AnthropicProvider.js";
+export { createProvider } from "./providers/factory.js";
 export { OpenAIProvider } from "./providers/OpenAIProvider.js";
 export {
   isToolCapableFinishReason,
@@ -13,6 +16,7 @@ export type {
   FinishReason,
   LLMProvider,
   LLMResponse,
+  ThinkingConfig,
   ToolCallRequest
 } from "./providers/Provider.js";
 export { SessionManager } from "./session/SessionManager.js";

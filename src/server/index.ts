@@ -97,7 +97,10 @@ export async function createRequestHandler(options: CreateServerOptions = {}): P
   const configDir = path.join(projectRoot, ".mini-agent");
   const staticDir = options.staticDir ?? defaultStaticDir();
   const state = createConfigState(await ensureDefaultConfig(configDir), configDir);
-  const sessions = new SessionManager({ sessionsDir: state.config.sessions.dir, source: "webui" });
+  const sessions = new SessionManager({
+    sessionsDir: state.config.sessions.dir,
+    source: "webui"
+  });
   const router = new HttpRouter();
 
   registerSessionRoutes(router, sessions);

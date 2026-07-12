@@ -138,6 +138,17 @@ native `http` server and a small WebSocket adapter, not Express.
   recovery, `PATCH /api/sessions/:key` endpoint, `SessionManager.get()`.
 - [x] `SessionSummary` cleanup (2026-07-03): removed `preview` field; `title`
   is canonical, falls back to first user message when no custom title set.
+- [x] Provider models & Composer redesign (2026-07-12):
+  - `ProviderConfig.models?: string[]` — curated model list per provider
+  - `LLMProvider.listModels?()` — fetch available models from provider API
+  - `AnthropicProvider.listModels()` + `OpenAIProvider.listModels()`
+  - Composer popover redesigned to 3-row accordion (Provider/Model/Thinking+Effort)
+  - Removed broken "管理 Provider 和 Agent" link in Composer
+- [x] Settings UI refactoring (2026-07-12):
+  - Sidebar navigation: desktop vertical (180px) + mobile horizontal pills
+  - 3 sections: Models (Agent config + Providers expandable list), Tools, System
+  - New SettingsGroup/SettingsRow/Toggle/ProviderRow sub-components
+  - All data logic preserved (toDraft, toConfigPatch, helpers, useConfig)
 - [ ] Workspace diff view (Changes tab in right sidebar is placeholder)
 - [ ] Dark mode (light mode complete with full design tokens; dark deferred)
 - [ ] Token usage and performance panel
@@ -146,7 +157,7 @@ native `http` server and a small WebSocket adapter, not Express.
 
 Stretch goals for resume differentiation.
 
-- [ ] Multi-provider support (Anthropic Messages API)
+- [x] Multi-provider support (Anthropic Messages API) — completed 2026-07-12
 - [ ] MCP (Model Context Protocol) client integration
 - [ ] Subagent spawning for parallel task execution
 - [ ] Provider retry with exponential backoff

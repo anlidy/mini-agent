@@ -11,32 +11,43 @@ describe("writeConfig", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-write-config-"));
     const configDir = path.join(workspace, ".mini-agent");
     const config = defaultConfig(configDir);
-    config.provider.apiKey = "real-key";
+    config.providers.deepseek!.apiKey = "real-key";
     await mkdir(configDir, { recursive: true });
     await writeFile(path.join(configDir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 
     const updated = await writeConfig({
-      provider: {
-        apiKey: REDACTED_API_KEY,
-        model: "new-model",
-        timeoutMs: 1234
+      providers: {
+        deepseek: {
+          type: "openai",
+          apiKey: REDACTED_API_KEY,
+          timeoutMs: 1234
+        }
       },
-      agent: {
-        maxIterations: 7,
-        maxToolResultChars: 2048,
-        contextWindowTokens: 4096
+      agents: {
+        default: {
+          provider: "deepseek",
+          model: "new-model",
+          thinking: { enabled: false, budgetTokens: 16_000 },
+          effort: 1,
+          maxIterations: 7,
+          maxToolResultChars: 2048,
+          contextWindowTokens: 4096,
+          params: {}
+        }
       },
-      exec: {
-        enabled: true,
-        timeoutMs: 5000,
-        maxOutputChars: 9000
+      tools: {
+        exec: {
+          enabled: true,
+          timeoutMs: 5000,
+          maxOutputChars: 9000
+        }
       }
     }, configDir);
 
-    expect(updated.provider.apiKey).toBe("real-key");
-    expect(updated.provider.model).toBe("new-model");
-    expect(updated.agent.maxIterations).toBe(7);
-    expect(updated.exec?.enabled).toBe(true);
+    expect(updated.providers.deepseek!.apiKey).toBe("real-key");
+    expect(updated.agents.default!.model).toBe("new-model");
+    expect(updated.agents.default!.maxIterations).toBe(7);
+    expect(updated.tools.exec?.enabled).toBe(true);
 
     const raw = await readFile(path.join(configDir, "config.json"), "utf8");
     expect(raw).toContain("real-key");
@@ -52,7 +63,19 @@ describe("writeConfig", () => {
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
     const before = await readFile(configPath, "utf8");
 
-    await expect(writeConfig({ agent: { maxIterations: 0 } }, configDir)).rejects.toThrow(/Invalid/);
+    await expect(writeConfig({
+      agents: {
+        default: {
+          provider: "deepseek",
+          model: "deepseek-chat",
+          thinking: { enabled: false, budgetTokens: 16_000 },
+          effort: 1,
+          maxIterations: 0,
+          maxToolResultChars: 64_000,
+          params: {}
+        }
+      }
+    }, configDir)).rejects.toThrow(/Invalid/);
 
     await expect(readFile(configPath, "utf8")).resolves.toBe(before);
   });

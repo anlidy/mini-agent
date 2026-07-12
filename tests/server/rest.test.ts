@@ -14,8 +14,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
   const config = defaultConfig(path.join(workspace, ".mini-agent"));
-  config.provider.apiKey = "secret-key";
-  config.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
+  config.providers.deepseek!.apiKey = "secret-key";
+  config.tools.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
   await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
   await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
   return createRequestHandler({ workspace });
@@ -118,17 +118,17 @@ describe("server REST API", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-config-"));
     const handler = await setup(workspace);
 
-    const config = (await call(handler, "GET", "/api/config")).json as { provider: { apiKey: string; model: string }; agent: { maxIterations: number } };
-    expect(config.provider.apiKey).toBe(REDACTED_API_KEY);
+    const config = (await call(handler, "GET", "/api/config")).json as { providers: Record<string, { apiKey: string; type: string }>; agents: Record<string, { model: string; maxIterations: number }> };
+    expect(config.providers.deepseek?.apiKey).toBe(REDACTED_API_KEY);
 
     const put = await call(handler, "PUT", "/api/config", {
-      provider: { ...config.provider, model: "rest-model" },
-      agent: { ...config.agent, maxIterations: 5 }
+      providers: { deepseek: { ...config.providers.deepseek, type: "openai" as const } },
+      agents: { default: { ...config.agents.default, model: "rest-model", maxIterations: 5 } }
     });
     expect(put.status).toBe(200);
-    const updated = put.json as { provider: { apiKey: string; model: string } };
-    expect(updated.provider.apiKey).toBe(REDACTED_API_KEY);
-    expect(updated.provider.model).toBe("rest-model");
+    const updated = put.json as { providers: Record<string, { apiKey: string }>; agents: Record<string, { model: string }> };
+    expect(updated.providers.deepseek?.apiKey).toBe(REDACTED_API_KEY);
+    expect(updated.agents.default?.model).toBe("rest-model");
 
     const raw = await readFile(path.join(workspace, ".mini-agent", "config.json"), "utf8");
     expect(raw).toContain("secret-key");

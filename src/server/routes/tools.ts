@@ -4,7 +4,10 @@ import type { ConfigState } from "./config.js";
 
 export function registerToolRoutes(router: HttpRouter, state: ConfigState): void {
   router.add("GET", "/api/tools", async (_req, res) => {
-    const registry = createDefaultToolRegistry({ search: state.config.search, exec: state.config.exec });
+    const registry = createDefaultToolRegistry({
+      search: state.config.tools.search,
+      exec: state.config.tools.exec
+    });
     await json(res, registry.getDefinitions());
   });
 }

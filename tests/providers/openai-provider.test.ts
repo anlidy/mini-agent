@@ -73,6 +73,7 @@ describe("OpenAIProvider", () => {
     });
     expect(result).toEqual({
       content: "hello",
+      reasoningContent: null,
       toolCalls: [],
       finishReason: "stop",
       usage: { prompt_tokens: 1, completion_tokens: 2 }
@@ -109,6 +110,7 @@ describe("OpenAIProvider", () => {
       messages: [{ role: "user", content: "read" }]
     })).resolves.toEqual({
       content: null,
+      reasoningContent: null,
       toolCalls: [{ id: "call_1", name: "read_file", arguments: { path: "README.md" } }],
       finishReason: "tool_calls",
       usage: { total_tokens: 9 }
@@ -213,7 +215,7 @@ describe("OpenAIProvider", () => {
     const done = events.at(-1);
     expect(done).toEqual({
       type: "done",
-      response: { content: "Hello", toolCalls: [], finishReason: "stop", usage: { total_tokens: 7 } }
+      response: { content: "Hello", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: { total_tokens: 7 } }
     });
   });
 
