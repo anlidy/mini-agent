@@ -1,13 +1,18 @@
 # Architecture
 
-mini-agent is a TypeScript agent runtime organized into focused, single-responsibility modules. Communication flows in one direction through well-defined interfaces.
+mini-agent is a TypeScript agent runtime organized into focused, single-responsibility modules. The `AgentProtocol` contract defines the runtime's surface; transports adapt that contract to different communication channels. Communication flows in one direction through well-defined interfaces.
 
 ## Module Map
 
 ```text
-CLI / REPL            Web UI Backend
-    │
-    ▼
+                    AgentProtocol (contract)
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+ DirectAgentClient   WebSocket Server   (future transports)
+  (in-process)        (cross-language)
+        │                 │
+        ▼                 ▼
 AgentLoop ──▶ ContextBuilder ──▶ prompts/ (identity, tool contract, skills)
     │
     ▼
@@ -47,6 +52,21 @@ Commands are dispatched before reaching the agent:
 `Ctrl-C` aborts the in-flight turn through a per-turn `AbortController` whose signal is threaded into `run`/`stream`; pressing it while idle exits.
 
 Boundary: the CLI is a thin driver. It never coordinates subsystems itself — that is AgentLoop's job — and depends only on `AgentLoop.run`/`stream` and the `ToolRegistry` interface. The `/tool` command deliberately bypasses the agent loop to exercise a tool in isolation; it is a verification aid, not a runtime path.
+
+### Protocol & Transport (`src/agent/protocol.ts`, `src/client/DirectAgentClient.ts`)
+
+The `AgentProtocol` interface is the transport-agnostic contract for the agent runtime. Every consumer — CLI, TUI, Web UI, or an external program — interacts with the runtime through this contract. It defines:
+
+- `runTurn(input, options)` — start a turn, get back `AsyncIterable<AgentEvent>`
+- `abortTurn()` — cancel the in-flight turn
+- `listSessions()`, `getSession()`, `deleteSession()`, `updateSession()` — session CRUD
+- `getToolDefinitions()` — registered tools
+
+`DirectAgentClient` is the in-process transport: it wraps an `Agent`, a `SessionManager`, and a `ToolRegistry` behind `AgentProtocol`. There is no serialization — the client yields native `AgentEvent` objects, and session operations delegate directly to the manager. This is the transport used by the CLI, TUI, or any Node.js embedder that wants zero-overhead access to the runtime.
+
+The WebSocket server (`src/server/wsHandler.ts`) implements the same protocol over JSON — each `AgentEvent` is serialized as a JSON message on the wire. The `bindAgentConnection` function bridges a WebSocket to an `AgentLoop.stream()` call, translating `user_message`/`abort`/`approve_command` client messages into protocol operations. This is how the Web UI and any non-TS client consume the runtime.
+
+Adding a new transport (e.g. Unix domain socket, HTTP SSE, gRPC) only requires a new implementation of the `AgentProtocol` contract — the core runtime (AgentLoop, tools, sessions) needs no changes.
 
 ### Web UI Backend (`src/server/`, `src/server.ts`)
 
@@ -244,8 +264,11 @@ Used for logging, monitoring, and approval flows.
 ## Data Flow
 
 ```text
-CLI / REPL or Web UI Backend (parse protocol, load+validate config)
-    │  plain input → AgentLoop.run()  (or .stream() with --stream)
+Transport (DirectAgentClient / WebSocket)
+    │  AgentProtocol.runTurn(input, options) → AsyncIterable<AgentEvent>
+    ▼
+AgentLoop.run() / stream()
+    │  prepares session, builds context
     ▼
 ContextBuilder.buildMessages()
     │  system prompt + history + user input

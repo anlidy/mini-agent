@@ -2,17 +2,15 @@
 
 ## Register
 
-product
+platform / developer-tool
 
 ## Users
 
-A solo developer using mini-agent as a personal AI coding assistant. Most work happens in the terminal; the Web UI is opened occasionally to review long conversations, browse files, and manage sessions. Usage context is a quiet desktop environment — natural daylight or indoor lighting during the day.
-
-Core tasks: chatting with the agent, inspecting tool call results, organizing projects/sessions, adjusting configuration.
+Developers building AI-powered workflows: CLI/TUI users who want fast terminal access, web-browser users who want chat-like sessions with file browsing, and SDK consumers who embed the runtime in their own tools. Communication happens through a single `AgentProtocol` contract — in-process or over WebSocket.
 
 ## Product Purpose
 
-mini-agent is a self-built TypeScript AI coding assistant. The Web UI is its graphical interface — interact with the agent, browse files, manage sessions and config without leaving the browser. It is not a commercial product; it is a "tool built for oneself": functional, but the interface should feel comfortable and focused.
+mini-agent is a self-built TypeScript AI agent runtime. It defines a transport-agnostic agent protocol, provides a tool-calling engine with multi-provider support, and ships with two transport implementations (in-process direct client and WebSocket server) plus reference CLI and Web UI clients. It is not a commercial product; it is a "tool built for oneself" and an exercise in agent architecture — but the protocol contract means any language can build a client on top.
 
 ## Brand Personality
 

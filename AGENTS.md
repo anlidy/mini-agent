@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository is a TypeScript AI agent project — a personal coding assistant with CLI, tool-calling, and extensible architecture. Work in this project should preserve the existing modular boundaries and keep the CLI usable.
+This repository is a TypeScript AI agent runtime — a transport-agnostic agent protocol with in-process and WebSocket transports, a tool-calling engine, multi-provider support, and reference CLI/Web UI clients. Work in this project should preserve the existing modular boundaries and keep the protocol contract clean.
 
 ## Project Commands
 
@@ -50,6 +50,8 @@ All UI changes must follow DESIGN.md — warm-paper aesthetic, restrained amber 
 
 ## Architecture Boundaries
 
+- `src/agent/protocol.ts` defines the `AgentProtocol` contract — the single source of truth for agent runtime operations (turn lifecycle, session management, tool definitions). Every transport implements this.
+- `src/client/DirectAgentClient.ts` is the in-process transport implementation. Wraps `AgentLoop` + `SessionManager` + `ToolRegistry` behind `AgentProtocol`.
 - `src/agent/AgentLoop.ts` coordinates session, context, runner, tools, and response persistence. It is the ONLY coordination layer.
 - `src/agent/AgentRunner.ts` owns the provider/tool-call iteration loop. Must not know about sessions or workspace product logic.
 - `src/providers/*` must not execute tools. Returns tool call requests only.

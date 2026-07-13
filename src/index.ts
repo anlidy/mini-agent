@@ -1,6 +1,10 @@
 export { createAgent } from "./agent/AgentLoop.js";
 export { AgentLoop } from "./agent/AgentLoop.js";
 export type { Agent, AgentOptions, RunResult } from "./agent/types.js";
+export type { AgentProtocol, TurnOptions } from "./agent/protocol.js";
+export type { AgentEvent } from "./agent/events.js";
+export { DirectAgentClient } from "./client/DirectAgentClient.js";
+export type { DirectAgentClientOptions } from "./client/DirectAgentClient.js";
 export { defaultConfig, ensureDefaultConfig, loadConfig } from "./config/loadConfig.js";
 export type { AgentConfig, Config, ProviderConfig } from "./config/Config.js";
 export { AnthropicProvider } from "./providers/AnthropicProvider.js";
@@ -20,8 +24,11 @@ export type {
   ToolCallRequest
 } from "./providers/Provider.js";
 export { SessionManager } from "./session/SessionManager.js";
+export type { SessionSummary } from "./session/SessionManager.js";
 export { createServer, startServer } from "./server/index.js";
 export type { CreateServerOptions, MiniAgentServer } from "./server/index.js";
+export { ToolRegistry } from "./tools/ToolRegistry.js";
+export type { Tool, ToolExecutionContext } from "./tools/Tool.js";
 export { createDefaultToolRegistry } from "./tools/index.js";
 
 export const version = "0.1.0";
