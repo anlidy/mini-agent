@@ -4,12 +4,24 @@ This repository is a TypeScript AI agent runtime — a transport-agnostic agent 
 
 ## Project Commands
 
-Run these before claiming a change is complete:
+For changes to code, configuration, tests, dependencies, or build tooling, run these
+before claiming the change is complete:
 
 ```bash
 npm test
 npm run typecheck
 npm run build
+```
+
+Documentation-only changes do not require tests, typecheck, or builds. Instead,
+review the rendered structure, verify referenced paths/commands against the repository,
+and inspect the final diff.
+
+For Web UI code changes, also run:
+
+```bash
+npm run web:test
+npm run web:build
 ```
 
 Use the REPL during manual verification:
