@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -13,12 +13,13 @@ import { createRequestHandler, type MiniAgentRequestHandler } from "../../src/se
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
-  const config = defaultConfig(path.join(workspace, ".mini-agent"));
+  const runtimeHome = path.join(workspace, "runtime");
+  const config = defaultConfig(runtimeHome);
   config.providers.deepseek!.apiKey = "secret-key";
   config.tools.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
-  await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-  await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
-  return createRequestHandler({ workspace });
+  await mkdir(runtimeHome, { recursive: true });
+  await writeFile(path.join(runtimeHome, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  return createRequestHandler({ workspace, runtimeHome });
 }
 
 async function call(
@@ -86,22 +87,9 @@ describe("server REST API", () => {
   it("lists, reads, and deletes sessions", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-sessions-"));
     const handler = await setup(workspace);
-    const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "demo.jsonl");
-    await mkdir(path.dirname(sessionPath), { recursive: true });
-    await writeFile(
-      sessionPath,
-      [
-        JSON.stringify({
-          _type: "metadata",
-          key: "demo",
-          created_at: "2026-06-04T00:00:00.000Z",
-          updated_at: "2026-06-04T00:00:00.000Z",
-          metadata: { source: "cli", title: "hello" }
-        }),
-        JSON.stringify({ role: "user", content: "hello", timestamp: "2026-06-04T00:00:00.000Z" })
-      ].join("\n") + "\n",
-      "utf8"
-    );
+    const created = await handler.sessions.create("demo", { workspace, title: "hello" });
+    created.messages.push({ role: "user", content: "hello", timestamp: "2026-06-04T00:00:00.000Z" });
+    await handler.sessions.save(created);
 
     const list = await call(handler, "GET", "/api/sessions");
     expect(list.json).toMatchObject([{ key: "demo", messageCount: 1, title: "hello" }]);
@@ -130,7 +118,7 @@ describe("server REST API", () => {
     expect(updated.providers.deepseek?.apiKey).toBe(REDACTED_API_KEY);
     expect(updated.agents.default?.model).toBe("rest-model");
 
-    const raw = await readFile(path.join(workspace, ".mini-agent", "config.json"), "utf8");
+    const raw = await readFile(path.join(workspace, "runtime", "config.json"), "utf8");
     expect(raw).toContain("secret-key");
     expect(raw).toContain("rest-model");
   });
@@ -139,20 +127,28 @@ describe("server REST API", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-files-"));
     await writeFile(path.join(workspace, "README.md"), "read me", "utf8");
     const handler = await setup(workspace);
+    await call(handler, "POST", "/api/sessions", { key: "files", workspace });
 
     const tools = (await call(handler, "GET", "/api/tools")).json as Array<{ function?: { name?: string } }>;
     expect(tools.some((definition) => definition.function?.name === "read_file")).toBe(true);
     expect(tools.some((definition) => definition.function?.name === "exec")).toBe(true);
+    expect(tools.some((definition) => definition.function?.name === "read_skill")).toBe(true);
 
-    const tree = (await call(handler, "GET", "/api/files/tree?path=.")).json as { children: Array<{ name: string }> };
+    const tree = (await call(handler, "GET", "/api/sessions/files/files/tree?path=.")).json as { children: Array<{ name: string }> };
     expect(tree.children.some((entry) => entry.name === "README.md")).toBe(true);
 
-    const content = await call(handler, "GET", "/api/files/content?path=README.md");
+    const content = await call(handler, "GET", "/api/sessions/files/files/content?path=README.md");
     expect(content.json).toEqual({ path: "README.md", content: "read me" });
 
-    const escaped = await call(handler, "GET", "/api/files/content?path=../outside");
+    const escaped = await call(handler, "GET", "/api/sessions/files/files/content?path=../outside");
     expect(escaped.status).toBe(403);
-    expect(escaped.json).toEqual({ error: "Path escapes workspace: ../outside" });
+    expect(escaped.json).toEqual({ error: "Path escapes workspace: ../outside", code: "forbidden" });
+
+    const outside = `${workspace}-outside.txt`;
+    await writeFile(outside, "outside");
+    await symlink(outside, path.join(workspace, "linked-outside"));
+    const symlinkEscape = await call(handler, "GET", "/api/sessions/files/files/content?path=linked-outside");
+    expect(symlinkEscape).toMatchObject({ status: 403, json: { code: "forbidden" } });
   });
 
   it("serves the default frontend build outside the selected workspace", async () => {
@@ -175,6 +171,42 @@ describe("server REST API", () => {
       } else {
         await writeFile(indexPath, previousIndex, "utf8");
       }
+    }
+  });
+
+  it("creates sessions explicitly, requires revisions, and supports nullable workspace", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-session-contract-"));
+    const handler = await setup(workspace);
+    const missing = await call(handler, "GET", "/api/sessions/missing");
+    expect(missing).toMatchObject({ status: 404, json: { code: "session_not_found" } });
+
+    const created = await call(handler, "POST", "/api/sessions", { key: "contract", workspace });
+    expect(created.status).toBe(201);
+    expect(created.json).toMatchObject({ key: "contract", revision: 1, effectiveWorkspace: workspace });
+
+    const renamed = await call(handler, "PATCH", "/api/sessions/contract", { revision: 1, title: "renamed" });
+    expect(renamed.json).toMatchObject({ revision: 2, metadata: { title: "renamed", workspace } });
+    const conflict = await call(handler, "PATCH", "/api/sessions/contract", { revision: 1, title: "stale" });
+    expect(conflict).toMatchObject({ status: 409, json: { code: "session_conflict" } });
+
+    const unbound = await call(handler, "PATCH", "/api/sessions/contract", { revision: 2, workspace: null });
+    expect(unbound.status).toBe(200);
+    expect((unbound.json as { metadata: Record<string, unknown> }).metadata.workspace).toBeUndefined();
+    expect((unbound.json as { effectiveWorkspace: string }).effectiveWorkspace).toContain(path.join("runtime", "scratch"));
+  });
+
+  it("returns 409 for PATCH and DELETE during an active session lease", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-rest-session-busy-"));
+    const handler = await setup(workspace);
+    await call(handler, "POST", "/api/sessions", { key: "busy", workspace });
+    const release = handler.sessions.acquireLease("busy");
+    try {
+      expect(await call(handler, "PATCH", "/api/sessions/busy", { revision: 1, title: "no" }))
+        .toMatchObject({ status: 409, json: { code: "session_busy" } });
+      expect(await call(handler, "DELETE", "/api/sessions/busy"))
+        .toMatchObject({ status: 409, json: { code: "session_busy" } });
+    } finally {
+      release();
     }
   });
 });

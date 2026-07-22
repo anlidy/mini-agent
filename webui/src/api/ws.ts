@@ -20,9 +20,9 @@ export type ServerMessage =
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; status: "ok" | "error"; content: string }
   | { type: "done"; result: AgentDoneResult }
-  | { type: "error"; error: string }
+  | { type: "error"; error: string; code?: string }
   | { type: "approve_request"; id: string; command: string }
-  | { type: "turn_rejected"; reason: string };
+  | { type: "turn_rejected"; reason: string; code?: string };
 
 export interface AgentSocket {
   send(message: ClientMessage): void;

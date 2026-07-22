@@ -7,6 +7,7 @@ export interface AgentConfig {
   maxIterations: number;
   maxToolResultChars: number;
   contextWindowTokens?: number;
+  outputReserveTokens?: number;
   /** Provider-specific extra parameters. */
   params: Record<string, unknown>;
 }

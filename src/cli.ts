@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import path from "node:path";
+import { stat } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -12,18 +13,24 @@ import { createProvider } from "./providers/factory.js";
 import { SessionManager } from "./session/SessionManager.js";
 import { createDefaultToolRegistry } from "./tools/index.js";
 import type { ToolRegistry } from "./tools/ToolRegistry.js";
+import { RuntimePaths } from "./runtime/paths.js";
+import { importLegacyWorkspace } from "./runtime/importLegacy.js";
+import { DirectAgentClient } from "./client/DirectAgentClient.js";
 
 interface CliArgs {
+  command: "run" | "import";
   workspace: string;
   session: string;
   resume: boolean;
   stream: boolean;
+  apply: boolean;
 }
 
 export interface RunCliOptions {
   argv?: string[];
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
+  runtimeHome?: string;
 }
 
 interface ReplContext {
@@ -40,14 +47,23 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const input = options.input ?? stdin;
   const output = options.output ?? stdout;
   const args = parseCliArgs(options.argv ?? process.argv.slice(2));
+  const requestedPaths = new RuntimePaths({ home: options.runtimeHome, workspace: args.workspace });
+  const workspace = await requestedPaths.normalizeWorkspace(args.workspace);
+  const paths = new RuntimePaths({ home: requestedPaths.home, workspace });
 
-  const configDir = path.join(path.resolve(args.workspace), ".mini-agent");
+  if (args.command === "import") {
+    const report = await importLegacyWorkspace(paths, args.apply);
+    await writeOutput(output, `${args.apply ? "Import applied" : "Import dry-run"}: ${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
+  const configDir = paths.home;
   let config;
   try {
     config = await ensureDefaultConfig(configDir);
   } catch (error) {
     if (error instanceof ConfigValidationError) {
-      await writeOutput(output, `Config error: ${error.message}\nFix .mini-agent/config.json and retry.\n`);
+      await writeOutput(output, `Config error: ${error.message}\nFix ${paths.configFile} and retry.\n`);
       process.exitCode = 1;
       return;
     }
@@ -62,14 +78,26 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     return;
   }
 
-  const sessionManager = new SessionManager({ sessionsDir: config.sessions.dir, source: "cli" });
-  const session = await sessionManager.getOrCreate(args.session);
-
   const providerName = agentConfig.provider;
   const providerConfig = config.providers[providerName];
+  const sessionManager = new SessionManager({ sessionsDir: paths.sessionsDir, source: "cli" });
+  const registry = createDefaultToolRegistry({ search: config.tools.search, exec: config.tools.exec });
+  const agent = new AgentLoop({
+    workspace,
+    runtimeHome: paths.home,
+    config,
+    agentKey,
+    sessionKey: args.session,
+    sessionSource: "cli",
+    tools: registry,
+    sessions: sessionManager
+  });
+  const client = new DirectAgentClient({ agent, sessions: sessionManager, tools: registry, workspace, runtimeHome: paths.home });
+  await maybeWriteImportHint(paths, output);
+  const session = await client.getSession(args.session) ?? await client.createSession({ key: args.session, workspace });
+
   await writeOutput(output, `mini-agent agent=${agentKey} provider=${providerName}(${providerConfig?.type ?? "?"}) model=${agentConfig.model} session=${args.session}\n`);
   await writeOutput(output, "Type /help for commands.\n");
-
   if (args.resume) {
     await writeOutput(output, `Resumed session ${args.session}\n`);
     for (const message of session.messages) {
@@ -79,20 +107,10 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
   }
 
-  const registry = createDefaultToolRegistry({ search: config.tools.search, exec: config.tools.exec });
-  const agent = new AgentLoop({
-    workspace: configDir,
-    config,
-    agentKey,
-    sessionKey: args.session,
-    sessionSource: "cli",
-    tools: registry
-  });
-
   const ctx: ReplContext = {
     agent,
     registry,
-    workspace: configDir,
+    workspace,
     sessionKey: args.session,
     output,
     stream: args.stream
@@ -211,6 +229,8 @@ async function handleRunLine(text: string, ctx: ReplContext): Promise<boolean> {
     if (usageLine) {
       await writeOutput(ctx.output, `usage> ${usageLine}\n`);
     }
+  } catch (error) {
+    await writeOutput(ctx.output, `error> ${error instanceof Error ? error.message : String(error)}\n`);
   } finally {
     ctx.abort = undefined;
   }
@@ -232,6 +252,8 @@ async function handleStreamingLine(text: string, ctx: ReplContext): Promise<bool
         toolsUsed.push(event.name);
       } else if (event.type === "done") {
         usage = event.result.usage;
+      } else if (event.type === "error") {
+        await writeOutput(ctx.output, `\nerror> ${event.error}\n`);
       }
     }
   } finally {
@@ -255,29 +277,44 @@ function formatUsage(usage: Record<string, number>): string {
 }
 
 function parseCliArgs(argv: string[]): CliArgs {
+  const command = argv[0] === "import" ? "import" : "run";
+  const args = command === "import" ? argv.slice(1) : argv;
   const { values } = parseArgs({
-    args: argv,
+    args,
     options: {
       workspace: { type: "string", default: process.cwd() },
       session: { type: "string", default: "default" },
       resume: { type: "boolean", default: false },
-      stream: { type: "boolean", default: false }
+      stream: { type: "boolean", default: false },
+      apply: { type: "boolean", default: false }
     },
     strict: true,
     allowPositionals: false
   });
   return {
+    command,
     workspace: values.workspace ?? process.cwd(),
     session: values.session ?? "default",
     resume: values.resume ?? false,
-    stream: values.stream ?? false
+    stream: values.stream ?? false,
+    apply: values.apply ?? false
   };
 }
 
-runCli().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+async function maybeWriteImportHint(paths: RuntimePaths, output: NodeJS.WritableStream): Promise<void> {
+  if (paths.legacyHome() === paths.home) return;
+  const exists = await stat(paths.legacyHome()).then((info) => info.isDirectory()).catch(() => false);
+  if (exists) {
+    await writeOutput(output, `Legacy runtime data found at ${paths.legacyHome()}. Run mini-agent import --workspace ${paths.projectWorkspace} to preview an explicit import.\n`);
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runCli().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
 
 async function flushStdout(output: NodeJS.WritableStream): Promise<void> {
   if (hasWritableNeedDrain(output) && output.writableNeedDrain) {

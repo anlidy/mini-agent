@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -45,6 +45,19 @@ function createTestRouter(initialRoute = "/chat/default") {
   );
 }
 
+function sessionResponse(key: string, messages: unknown[] = []) {
+  return {
+    version: 1,
+    revision: 1,
+    key,
+    messages,
+    createdAt: "",
+    updatedAt: "",
+    metadata: {},
+    effectiveWorkspace: "/tmp/scratch"
+  };
+}
+
 describe("App (with router)", () => {
   afterEach(() => {
     FakeWebSocket.instances = [];
@@ -66,18 +79,12 @@ describe("App (with router)", () => {
 
         if (path.startsWith("/api/sessions/")) {
           return new Response(
-            JSON.stringify({
-              key: "default",
-              messages: [],
-              createdAt: "",
-              updatedAt: "",
-              metadata: {}
-            }),
+            JSON.stringify(sessionResponse("default")),
             { status: 200 }
           );
         }
 
-        if (path.startsWith("/api/files/tree")) {
+        if (path.includes("/files/tree")) {
           return new Response(
             JSON.stringify({
               name: ".",
@@ -117,9 +124,7 @@ describe("App (with router)", () => {
         if (path === "/api/sessions/default") {
           sessionRequestCount += 1;
           return new Response(
-            JSON.stringify({
-              key: "default",
-              messages:
+            JSON.stringify(sessionResponse("default",
                 sessionRequestCount === 1
                   ? []
                   : [
@@ -133,16 +138,12 @@ describe("App (with router)", () => {
                         content: "historical assistant answer",
                         timestamp: "2026-06-21T00:00:01.000Z"
                       }
-                    ],
-              createdAt: "",
-              updatedAt: "",
-              metadata: {}
-            }),
+                    ])),
             { status: 200 }
           );
         }
 
-        if (path.startsWith("/api/files/tree")) {
+        if (path.includes("/files/tree")) {
           return new Response(JSON.stringify({ name: ".", path: ".", type: "directory", children: [] }), {
             status: 200
           });
@@ -155,6 +156,7 @@ describe("App (with router)", () => {
     render(<RouterProvider router={createTestRouter()} />);
 
     await screen.findByRole("button", { name: "新建对话" });
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBeGreaterThan(0));
     FakeWebSocket.instances[0]?.emit("message", {
       data: JSON.stringify({
         type: "done",
@@ -175,16 +177,15 @@ describe("App (with router)", () => {
 
   it("loads history for a selected non-default session", async () => {
     vi.stubGlobal("WebSocket", FakeWebSocket);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL) => {
         const path = String(input);
 
         if (path === "/api/sessions") {
           return new Response(
             JSON.stringify([
-              { key: "default", createdAt: "", updatedAt: "", messageCount: 0, title: "" },
-              { key: "other", createdAt: "", updatedAt: "", messageCount: 2, title: "other prompt" }
+              { key: "default", version: 1, revision: 1, createdAt: "", updatedAt: "", messageCount: 0, title: "", effectiveWorkspace: "/tmp/scratch" },
+              { key: "other", version: 1, revision: 1, createdAt: "", updatedAt: "", messageCount: 2, title: "other prompt", effectiveWorkspace: "/tmp/other" }
             ]),
             { status: 200 }
           );
@@ -192,40 +193,34 @@ describe("App (with router)", () => {
 
         if (path === "/api/sessions/other") {
           return new Response(
-            JSON.stringify({
-              key: "other",
-              messages: [
-                { role: "user", content: "other prompt", timestamp: "2026-06-21T00:00:00.000Z" },
-                { role: "assistant", content: "other answer", timestamp: "2026-06-21T00:00:01.000Z" }
-              ],
-              createdAt: "",
-              updatedAt: "",
-              metadata: {}
-            }),
+            JSON.stringify(sessionResponse("other", [
+              { role: "user", content: "other prompt", timestamp: "2026-06-21T00:00:00.000Z" },
+              { role: "assistant", content: "other answer", timestamp: "2026-06-21T00:00:01.000Z" }
+            ])),
             { status: 200 }
           );
         }
 
         if (path === "/api/sessions/default") {
-          return new Response(
-            JSON.stringify({ key: "default", messages: [], createdAt: "", updatedAt: "", metadata: {} }),
-            { status: 200 }
-          );
+          return new Response(JSON.stringify(sessionResponse("default")), { status: 200 });
         }
 
-        if (path.startsWith("/api/files/tree")) {
-          return new Response(JSON.stringify({ name: ".", path: ".", type: "directory", children: [] }), {
-            status: 200
-          });
+        if (path.includes("/files/tree")) {
+          return new Response(JSON.stringify({ name: ".", path: ".", type: "directory", children: [] }), { status: 200 });
         }
 
         return new Response(JSON.stringify({}), { status: 200 });
-      })
+      }
+    );
+    vi.stubGlobal(
+      "fetch",
+      fetchMock
     );
 
     render(<RouterProvider router={createTestRouter()} />);
 
     await userEvent.click(await screen.findByRole("button", { name: "other prompt" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/sessions/other")).toBe(true));
 
     expect(await screen.findByText("other answer")).toBeInTheDocument();
     expect(screen.getAllByText("other prompt").length).toBeGreaterThan(0);
@@ -240,11 +235,11 @@ describe("App (with router)", () => {
         if (path === "/api/sessions") return new Response(JSON.stringify([]), { status: 200 });
         if (path.startsWith("/api/sessions/")) {
           return new Response(
-            JSON.stringify({ key: "default", messages: [], createdAt: "", updatedAt: "", metadata: {} }),
+            JSON.stringify(sessionResponse("default")),
             { status: 200 }
           );
         }
-        if (path.startsWith("/api/files/tree")) {
+        if (path.includes("/files/tree")) {
           return new Response(JSON.stringify({ name: ".", path: ".", type: "directory", children: [] }), { status: 200 });
         }
         if (path === "/api/config") {

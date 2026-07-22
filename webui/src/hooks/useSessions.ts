@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { apiDelete, apiGet, apiPatch } from "../api/http";
+import { apiDelete, apiGet, apiPatch, apiPost } from "../api/http";
 import type { Session, SessionSummary } from "../api/types";
 
 const ACTIVE_SESSION_STORAGE_KEY = "mini-agent.activeSessionKey";
@@ -55,6 +55,10 @@ export function useSessions(defaultKey = "default") {
   const mountedRef = useRef(true);
   const refreshRequestRef = useRef(0);
   const sessionRequestRef = useRef(0);
+  const sessionsRef = useRef(sessions);
+  const activeSessionRef = useRef(activeSession);
+  sessionsRef.current = sessions;
+  activeSessionRef.current = activeSession;
 
   const getDisplayName = useCallback(
     (key: string): string => displayNames[key] || key,
@@ -62,26 +66,6 @@ export function useSessions(defaultKey = "default") {
   );
 
   const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const setDisplayName = useCallback((key: string, name: string): void => {
-    const next = { ...readDisplayNames() };
-    if (name.trim()) {
-      next[key] = name.trim();
-    } else {
-      delete next[key];
-    }
-    writeDisplayNames(next);
-    setDisplayNames(next);
-    // Debounce backend persistence to avoid wasted PATCH requests during rapid typing
-    if (patchTimerRef.current) {
-      clearTimeout(patchTimerRef.current);
-    }
-    patchTimerRef.current = setTimeout(() => {
-      apiPatch(`/api/sessions/${encodeURIComponent(key)}`, { title: name.trim() }).catch(() => {
-        // Silently ignore backend persistence failures
-      });
-    }, 500);
-  }, []);
 
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequestRef.current;
@@ -137,6 +121,58 @@ export function useSessions(defaultKey = "default") {
     }
   }, []);
 
+  const createSession = useCallback(async (options: { key?: string; workspace?: string | null } = {}) => {
+    try {
+      const created = await apiPost<Session>("/api/sessions", options);
+      await refresh();
+      if (mountedRef.current) setError(undefined);
+      return created;
+    } catch (cause) {
+      if (mountedRef.current) setError(formatError(cause));
+      throw cause;
+    }
+  }, [refresh]);
+
+  const patchSession = useCallback(async (key: string, patch: { title?: string; workspace?: string | null }) => {
+    const known = activeSessionRef.current?.key === key
+      ? activeSessionRef.current
+      : sessionsRef.current.find((session) => session.key === key);
+    try {
+      const current = known ?? await apiGet<Session>(`/api/sessions/${encodeURIComponent(key)}`);
+      const updated = await apiPatch<Session>(`/api/sessions/${encodeURIComponent(key)}`, { revision: current.revision, ...patch });
+      if (mountedRef.current && activeSessionRef.current?.key === key) setActiveSession(updated);
+      await refresh();
+      if (mountedRef.current) setError(undefined);
+      return updated;
+    } catch (cause) {
+      await refresh();
+      const latest = await apiGet<Session>(`/api/sessions/${encodeURIComponent(key)}`).catch(() => undefined);
+      if (latest && activeSessionRef.current?.key === key) setActiveSession(latest);
+      if (latest) {
+        const names = { ...readDisplayNames() };
+        const title = latest.metadata.title;
+        if (typeof title === "string" && title) names[key] = title;
+        else delete names[key];
+        writeDisplayNames(names);
+        setDisplayNames(names);
+      }
+      if (mountedRef.current) setError(formatError(cause));
+      throw cause;
+    }
+  }, [refresh]);
+
+  const setDisplayName = useCallback((key: string, name: string): void => {
+    const next = { ...readDisplayNames() };
+    if (name.trim()) next[key] = name.trim();
+    else delete next[key];
+    writeDisplayNames(next);
+    setDisplayNames(next);
+    if (patchTimerRef.current) clearTimeout(patchTimerRef.current);
+    patchTimerRef.current = setTimeout(() => {
+      void patchSession(key, { title: name.trim() }).catch(() => undefined);
+    }, 500);
+  }, [patchSession]);
+
   const deleteSession = useCallback(async (key: string) => {
     try {
       await apiDelete(`/api/sessions/${encodeURIComponent(key)}`);
@@ -170,5 +206,5 @@ export function useSessions(defaultKey = "default") {
     void refresh();
   }, [refresh]);
 
-  return { sessions, activeKey, activeSession, error, refresh, loadSession, deleteSession, getDisplayName, setDisplayName };
+  return { sessions, activeKey, activeSession, error, refresh, loadSession, createSession, patchSession, deleteSession, getDisplayName, setDisplayName };
 }

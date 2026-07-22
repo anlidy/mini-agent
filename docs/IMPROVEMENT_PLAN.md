@@ -10,7 +10,7 @@ mini-agent 已经能完成对话、调用工具、保存会话，也有 CLI 和 
 - 上下文裁剪有两套规则，可能重复裁剪或拆散工具调用。
 - Skills、Provider、搜索和外部工具都有扩展入口，但契约还不完整。
 
-当前先做第一阶段。后面的阶段只定方向，不提前展开实现细节。
+第一阶段已于 2026-07-22 实施完成。后面的阶段只定方向，不提前展开实现细节。
 
 ## 做事原则
 
@@ -23,7 +23,9 @@ mini-agent 已经能完成对话、调用工具、保存会话，也有 CLI 和 
 
 ---
 
-## 第一阶段：把 Runtime 底座弄稳
+## 第一阶段：把 Runtime 底座弄稳 ✅
+
+实施说明：第一阶段采用 Session v1 + 文件锁/CAS、全局 Runtime Home、显式 import、revision API、单点 Context 预算和严格 Skills catalog。只有 `completed` 与 `max_iterations` 会提交历史。已经执行的外部工具副作用无法因 Session 提交失败而回滚。原草案中的 `.mini-agent/project.json` 覆盖因字段和优先级尚未设计，明确推迟到独立阶段。
 
 ### 目标
 
@@ -87,7 +89,7 @@ $MINI_AGENT_HOME/              # 默认 ~/.mini-agent
 ├── SOUL.md / USER.md
 ├── skills/
 └── .mini-agent/
-    └── project.json           # 可选的非敏感项目覆盖
+    └── project.json           # 预留约定；第一阶段不读取
 ```
 
 规则：
@@ -97,7 +99,7 @@ $MINI_AGENT_HOME/              # 默认 ~/.mini-agent
 - 所有 session 只存一份，统一放在 `$MINI_AGENT_HOME/sessions`。
 - workspace 保存前必须转成真实、存在的绝对目录。
 - 未绑定项目的 session 使用 `scratch`，不能把 home 本身当工作区。
-- 项目配置只能覆盖白名单字段，不能包含 API key 或 sessions 路径。
+- 项目覆盖字段、优先级和用户入口留待独立设计；第一阶段不读取 `project.json`。
 - 同一 turn 期间不能切换 workspace。
 
 完成标准：

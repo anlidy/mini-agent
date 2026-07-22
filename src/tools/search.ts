@@ -3,12 +3,13 @@ import path from "node:path";
 
 import type { Tool } from "./Tool.js";
 import { shouldIgnore, truncate } from "./filesystem.js";
-import { resolveWorkspacePath, toWorkspaceRelative } from "./path.js";
+import { resolveWorkspaceRealPath, toWorkspaceRelative } from "./path.js";
 
 export function createSearchTools(): Tool[] {
   return [
     {
       name: "find_files",
+      compactable: true,
       description: "Find workspace files by a simple glob-like pattern such as *.ts or README.md.",
       readOnly: true,
       parameters: {
@@ -21,7 +22,7 @@ export function createSearchTools(): Tool[] {
         required: ["pattern"]
       },
       async execute(args, context) {
-        const root = resolveWorkspacePath(context.workspace, typeof args.path === "string" ? args.path : ".");
+        const root = await resolveWorkspaceRealPath(context.workspace, typeof args.path === "string" ? args.path : ".");
         const matcher = globMatcher(String(args.pattern));
         const files = await walkFiles(context.workspace, root, numberArg(args.maxResults, 200));
         const matches = files.filter((file) => matcher(path.basename(file)) || matcher(toWorkspaceRelative(context.workspace, file)));
@@ -30,6 +31,7 @@ export function createSearchTools(): Tool[] {
     },
     {
       name: "grep",
+      compactable: true,
       description: "Search text files in the workspace for a literal string or JavaScript regular expression.",
       readOnly: true,
       parameters: {
@@ -43,7 +45,7 @@ export function createSearchTools(): Tool[] {
         required: ["pattern"]
       },
       async execute(args, context) {
-        const root = resolveWorkspacePath(context.workspace, typeof args.path === "string" ? args.path : ".");
+        const root = await resolveWorkspaceRealPath(context.workspace, typeof args.path === "string" ? args.path : ".");
         const files = await walkFiles(context.workspace, root, 1000);
         const matcher = args.regex === true
           ? (line: string) => new RegExp(String(args.pattern)).test(line)
@@ -92,7 +94,7 @@ async function walkFiles(workspace: string, root: string, maxFiles: number): Pro
       } else if (entry.isFile()) {
         const info = await stat(fullPath);
         if (info.size <= 2_000_000) {
-          results.push(resolveWorkspacePath(workspace, toWorkspaceRelative(workspace, fullPath)));
+          results.push(await resolveWorkspaceRealPath(workspace, toWorkspaceRelative(workspace, fullPath)));
         }
       }
       if (results.length >= maxFiles) {

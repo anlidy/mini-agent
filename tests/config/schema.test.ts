@@ -10,6 +10,7 @@ describe("config schema validation", () => {
     const parsed = parseConfig(defaultConfig(path.join(workspace, ".mini-agent")), workspace);
     expect(parsed.agents.default!.model).toBe("deepseek-chat");
     expect(parsed.agents.default!.maxIterations).toBe(100);
+    expect(parsed.agents.default!.outputReserveTokens).toBe(4096);
   });
 
   it("fills defaults for omitted optional sections", () => {
@@ -19,6 +20,7 @@ describe("config schema validation", () => {
     }, "/tmp/ws");
     expect(parsed.providers.deepseek!.apiKey).toBe("sk-test");
     expect(parsed.agents.default!.maxIterations).toBeGreaterThan(0);
+    expect(parsed.agents.default!.outputReserveTokens).toBe(4096);
     expect(parsed.sessions.maxHistoryMessages).toBe(50);
   });
 

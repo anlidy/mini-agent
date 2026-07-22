@@ -14,12 +14,12 @@ export interface Project {
  */
 export function useProjects() {
   const getGrouped = useCallback(
-    (sessions: SessionSummary[], defaultWorkspace: string) => {
+    (sessions: SessionSummary[]) => {
       const projectMap = new Map<string, string[]>();
 
       for (const s of sessions) {
         const ws = s.workspace;
-        if (ws && ws !== defaultWorkspace) {
+        if (ws) {
           const keys = projectMap.get(ws) ?? [];
           keys.push(s.key);
           projectMap.set(ws, keys);

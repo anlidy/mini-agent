@@ -5,7 +5,10 @@ import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import type { AgentEvent } from "./events.js";
 
 export interface AgentOptions {
+  /** Project working directory. Defaults to cwd. */
   workspace?: string;
+  /** Global runtime home. Defaults to MINI_AGENT_HOME or ~/.mini-agent. */
+  runtimeHome?: string;
   /** Full config. When provided, the agent is built from config.agents[agentKey]. */
   config?: Config;
   /** Which agent to use from config.agents. Defaults to "default". */

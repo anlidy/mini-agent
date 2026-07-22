@@ -1,5 +1,16 @@
-export async function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path, { method: "GET" });
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export async function apiGet<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return request<T>(path, { ...init, method: "GET" });
+}
+
+export async function apiPost<T>(path: string, body: unknown = {}): Promise<T> {
+  return request<T>(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
@@ -34,7 +45,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     const error = data && typeof data === "object" && "error" in data
       ? String((data as { error: unknown }).error)
       : `Request failed with ${response.status}`;
-    throw new Error(error);
+    const code = data && typeof data === "object" && "code" in data ? String((data as { code: unknown }).code) : undefined;
+    throw new ApiError(error, response.status, code);
   }
 
   return data as T;

@@ -11,7 +11,7 @@ interface Route {
 }
 
 export class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code = "http_error") {
     super(message);
     this.name = "HttpError";
   }
@@ -88,7 +88,8 @@ export async function noContent(res: ServerResponse): Promise<void> {
 export async function writeError(res: ServerResponse, error: unknown): Promise<void> {
   const status = error instanceof HttpError ? error.status : statusFromError(error);
   const message = error instanceof Error ? error.message : String(error);
-  await json(res, { error: message }, status);
+  const code = errorCode(error, status);
+  await json(res, { error: message, code }, status);
 }
 
 function splitPath(path: string): string[] {
@@ -113,6 +114,10 @@ function matchParts(routeParts: string[], requestParts: string[]): Params | unde
 }
 
 function statusFromError(error: unknown): number {
+  if (error && typeof error === "object" && "code" in error) {
+    if (error.code === "session_conflict" || error.code === "session_busy" || error.code === "session_key_collision") return 409;
+    if (error.code === "invalid_workspace") return 400;
+  }
   if (error instanceof Error && error.message.startsWith("Path escapes workspace:")) {
     return 403;
   }
@@ -120,4 +125,10 @@ function statusFromError(error: unknown): number {
     return 403;
   }
   return 500;
+}
+
+function errorCode(error: unknown, status: number): string {
+  if (error instanceof HttpError) return error.code;
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") return error.code;
+  return status === 404 ? "not_found" : status === 403 ? "forbidden" : "internal_error";
 }

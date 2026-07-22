@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
-import { apiPatch } from "../api/http";
 import ChatThread from "../components/ChatThread";
 import type { ModelConfig } from "../components/Composer";
 import type { RootContext } from "./types";
@@ -11,7 +10,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
 
   const [workspace, setWorkspace] = useState(defaultWorkspace);
-  const [workspacePatched, setWorkspacePatched] = useState(false);
+  const workspacePatchRef = useRef<Promise<boolean> | undefined>(undefined);
 
   // Derive model config from config
   const agents = config.config?.agents ?? {};
@@ -47,34 +46,27 @@ export default function ChatPage() {
     } else {
       setWorkspace(defaultWorkspace);
     }
-    setWorkspacePatched(false);
+    workspacePatchRef.current = undefined;
   }, [activeKey, sessions.activeSession?.metadata?.workspace, defaultWorkspace]);
 
-  const handleWorkspaceChange = useCallback(
-    (path: string) => {
-      if (path.trim()) {
-        setWorkspace(path.trim());
-      }
-    },
-    []
-  );
+  const handleWorkspaceChange = useCallback((nextPath: string) => {
+    const normalized = nextPath.trim();
+    if (!normalized || normalized === workspace) return;
+    setWorkspace(normalized);
+    workspacePatchRef.current = sessions.patchSession(activeKey, { workspace: normalized })
+      .then(() => true)
+      .catch(() => {
+        setWorkspace(sessions.activeSession?.effectiveWorkspace ?? defaultWorkspace);
+        return false;
+      });
+  }, [activeKey, defaultWorkspace, sessions.activeSession?.effectiveWorkspace, sessions.patchSession, workspace]);
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
-      // On first message, persist workspace to session BEFORE sending so the
-      // AgentLoop sees the workspace in session metadata.
-      const isNew = !sessions.activeSession?.messages?.length;
-      if (isNew && !workspacePatched && workspace !== defaultWorkspace) {
-        setWorkspacePatched(true);
-        await apiPatch(`/api/sessions/${encodeURIComponent(activeKey)}`, {
-          workspace,
-        }).catch(() => {
-          // Silently ignore persistence failures
-        });
-      }
+      if (workspacePatchRef.current && !await workspacePatchRef.current) return false;
       return socket.send(text);
     },
-    [activeKey, sessions.activeSession?.messages?.length, socket, workspace, workspacePatched, defaultWorkspace]
+    [socket]
   );
 
   const handleOpenSettings = useCallback(() => {

@@ -59,6 +59,6 @@ describe("HttpRouter", () => {
 
     expect(handled).toBe(true);
     expect(res.status()).toBe(404);
-    expect(JSON.parse(res.body())).toEqual({ error: "Not found" });
+    expect(JSON.parse(res.body())).toEqual({ error: "Not found", code: "http_error" });
   });
 });

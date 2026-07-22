@@ -15,6 +15,6 @@ export interface RootContext {
   lastChatKey: string;
   toggleRight(): void;
   isRightCollapsed: boolean;
-  /** Absolute path of the default workspace (parent of sessions.dir). */
+  /** Effective workspace returned by the active Session API. */
   defaultWorkspace: string;
 }

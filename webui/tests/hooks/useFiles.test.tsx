@@ -58,7 +58,7 @@ describe("useFiles", () => {
   it("loads selected file content with an encoded path", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
-      if (path === "/api/files/tree?path=.") {
+      if (path === "/api/sessions/default/files/tree?path=.") {
         return jsonResponse(tree([]));
       }
       return jsonResponse(file("docs/space file.md"));
@@ -72,7 +72,7 @@ describe("useFiles", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/files/content?path=docs%2Fspace%20file.md",
+      "/api/sessions/default/files/content?path=docs%2Fspace%20file.md",
       expect.objectContaining({ method: "GET" })
     );
     expect(result.current.selected?.path).toBe("docs/space file.md");
@@ -85,13 +85,13 @@ describe("useFiles", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const path = String(input);
-        if (path === "/api/files/tree?path=.") {
+        if (path === "/api/sessions/default/files/tree?path=.") {
           return Promise.resolve(jsonResponse(tree([])));
         }
-        if (path === "/api/files/content?path=first.txt") {
+        if (path === "/api/sessions/default/files/content?path=first.txt") {
           return firstRequest.promise;
         }
-        if (path === "/api/files/content?path=second.txt") {
+        if (path === "/api/sessions/default/files/content?path=second.txt") {
           return secondRequest.promise;
         }
         return Promise.reject(new Error(`Unexpected path ${path}`));
@@ -121,5 +121,42 @@ describe("useFiles", () => {
     });
 
     expect(result.current.selected?.path).toBe("second.txt");
+  });
+
+  it("invalidates an in-flight file request when the session changes", async () => {
+    const oldRequest = deferred<Response>();
+    let oldSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const requestPath = String(input);
+        if (requestPath.includes("/files/tree")) {
+          return Promise.resolve(jsonResponse(tree([])));
+        }
+        if (requestPath === "/api/sessions/old/files/content?path=old.txt") {
+          oldSignal = init?.signal ?? undefined;
+          return oldRequest.promise;
+        }
+        return Promise.reject(new Error(`Unexpected path ${requestPath}`));
+      })
+    );
+    const { result, rerender } = renderHook(
+      ({ sessionKey }) => useFiles(sessionKey, 1),
+      { initialProps: { sessionKey: "old" } }
+    );
+    await waitFor(() => expect(result.current.tree).toBeDefined());
+
+    let selection!: Promise<void>;
+    act(() => {
+      selection = result.current.selectFile("old.txt");
+    });
+    rerender({ sessionKey: "new" });
+    await waitFor(() => expect(oldSignal?.aborted).toBe(true));
+
+    await act(async () => {
+      oldRequest.resolve(jsonResponse(file("old.txt")));
+      await selection;
+    });
+    expect(result.current.selected).toBeUndefined();
   });
 });

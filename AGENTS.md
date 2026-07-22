@@ -76,18 +76,24 @@ All UI changes must follow DESIGN.md — warm-paper aesthetic, restrained amber 
 
 ## Runtime Data
 
-Local runtime data lives under the configDir (default `<cwd>/.mini-agent`):
+Local runtime data lives under the Runtime Home (`MINI_AGENT_HOME`, default
+`~/.mini-agent`):
 
 ```text
-.mini-agent/
+~/.mini-agent/
 ├── config.json
-└── workspace/
-    └── sessions/
+├── sessions/
+├── skills/
+└── scratch/
 ```
 
 This directory is git-ignored. Do not commit local config, API keys, or session JSONL files.
 
-Each session may carry a `metadata.workspace` (per-conversation working directory). When unset or equal to configDir, the session is an "orphan" (no project). When set to a different path, the sidebar groups it into a project named after that path's last segment. The default workspace in the Composer is configDir.
+Each session may carry a canonical `metadata.workspace` (per-conversation working
+directory). When unset, the session is an "orphan" and uses an isolated directory
+under Runtime Home `scratch/`. Sessions with a workspace are grouped by that path.
+`--workspace` selects the project directory only; it never selects configuration or
+Session storage.
 
 Never hard-code or expose API keys, tokens, credentials, local provider secrets, or real config values in git-committable source, tests, docs, fixtures, generated defaults, or examples. Use placeholders, omitted fields, environment variables, or `.mini-agent/config.json` values that remain local and git-ignored.
 
@@ -103,11 +109,11 @@ Never hard-code or expose API keys, tokens, credentials, local provider secrets,
 
 The CLI should:
 
-- derive configDir as `<--workspace>/.mini-agent` (default `<cwd>/.mini-agent`),
-- create `configDir/config.json` on first run,
+- derive Runtime Home from `MINI_AGENT_HOME` (default `~/.mini-agent`); `--workspace` is only the project directory,
+- create `$MINI_AGENT_HOME/config.json` on first run,
 - print a clean `Config error:` message (not a stack trace) when config is invalid,
 - use the configured OpenAI-compatible provider,
-- save sessions to `configDir/workspace/sessions/{key}.jsonl`,
+- save revisioned sessions to `$MINI_AGENT_HOME/sessions/{sha256(key)}.jsonl`,
 - write a metadata header as the first JSONL line before per-message records,
 - support `--resume` by printing previous user/assistant messages,
 - support `--stream` to print assistant tokens live,
@@ -120,15 +126,18 @@ The CLI should:
 The local server should:
 
 - bind to `127.0.0.1` by default,
-- use `--workspace` as project root; configDir = `<workspace>/.mini-agent`,
+- use `--workspace` only as project root and share the global Runtime Home with CLI,
 - expose REST routes under `/api` with JSON `{ error }` failures,
 - redact `provider.apiKey` from `GET /api/config`,
 - preserve the real API key when `PUT /api/config` receives `***`,
 - support `workspace` in `PATCH /api/sessions/:key` for per-conversation workspace,
+- require explicit `POST /api/sessions` creation and revision-bearing PATCH requests,
+- scope file routes under `/api/sessions/:key/files/*`,
 - keep file tree/content APIs workspace-scoped and read-only,
 - use one active turn per WebSocket connection and reject overlaps with `turn_rejected`,
 - bridge `exec` approvals through the same WebSocket connection,
 - abort in-flight turns and reject pending approvals on connection close.
+- emit `done` only after the successful Session commit; failures emit one terminal `error`.
 
 ## Built-In Tool Expectations
 

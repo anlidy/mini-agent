@@ -1,5 +1,6 @@
 export { createAgent } from "./agent/AgentLoop.js";
-export { AgentLoop } from "./agent/AgentLoop.js";
+export { AgentLoop, AgentTurnError } from "./agent/AgentLoop.js";
+export { ContextBudgetError } from "./agent/AgentRunner.js";
 export type { Agent, AgentOptions, RunResult } from "./agent/types.js";
 export type { AgentProtocol, TurnOptions } from "./agent/protocol.js";
 export type { AgentEvent } from "./agent/events.js";
@@ -23,8 +24,15 @@ export type {
   ThinkingConfig,
   ToolCallRequest
 } from "./providers/Provider.js";
-export { SessionManager } from "./session/SessionManager.js";
+export {
+  SessionManager,
+  SessionBusyError,
+  SessionConflictError,
+  SessionKeyCollisionError,
+  SessionParseError
+} from "./session/SessionManager.js";
 export type { SessionSummary } from "./session/SessionManager.js";
+export type { Session, SessionHeader, SessionMetadata } from "./session/Session.js";
 export { createServer, startServer } from "./server/index.js";
 export type { CreateServerOptions, MiniAgentServer } from "./server/index.js";
 export { ToolRegistry } from "./tools/ToolRegistry.js";

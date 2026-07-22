@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Tool } from "./Tool.js";
-import { resolveWorkspacePath, toWorkspaceRelative } from "./path.js";
+import { resolveWorkspaceRealPath, toWorkspaceRelative } from "./path.js";
 
 interface Hunk {
   oldStart: number;
@@ -39,7 +39,7 @@ export function createPatchTool(): Tool {
 
       let target: string;
       try {
-        target = resolveWorkspacePath(context.workspace, parsed.targetPath);
+        target = await resolveWorkspaceRealPath(context.workspace, parsed.targetPath, true);
       } catch (error) {
         return `Error: ${error instanceof Error ? error.message : String(error)}`;
       }
@@ -212,4 +212,3 @@ function exactEquals(a: string, b: string): boolean {
 function trimmedEquals(a: string, b: string): boolean {
   return a.trim() === b.trim();
 }
-

@@ -32,6 +32,7 @@ interface AgentDraft {
   maxIterations: string;
   maxToolResultChars: string;
   contextWindowTokens: string;
+  outputReserveTokens: string;
 }
 
 interface SettingsDraft {
@@ -213,6 +214,18 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
                         setDraft({ ...draft, agents: next });
                       }}
                       placeholder="auto"
+                      inputMode="numeric"
+                    />
+                  </SettingsRow>
+                  <SettingsRow label="Output reserve">
+                    <Input
+                      className="w-28 font-mono text-[13px]"
+                      value={agent.outputReserveTokens}
+                      onChange={(e) => {
+                        const next = [...draft.agents];
+                        next[0] = { ...agent, outputReserveTokens: e.target.value };
+                        setDraft({ ...draft, agents: next });
+                      }}
                       inputMode="numeric"
                     />
                   </SettingsRow>
@@ -722,7 +735,8 @@ function toDraft(config: Config): SettingsDraft {
       effort: numberToString(a.effort),
       maxIterations: numberToString(a.maxIterations),
       maxToolResultChars: numberToString(a.maxToolResultChars),
-      contextWindowTokens: numberToString(a.contextWindowTokens)
+      contextWindowTokens: numberToString(a.contextWindowTokens),
+      outputReserveTokens: numberToString(a.outputReserveTokens ?? 4096)
     })),
     searchBackend: config.tools.search?.backend ?? "none",
     searchMaxResults: numberToString(config.tools.search?.maxResults ?? 5),
@@ -746,6 +760,7 @@ function toConfigPatch(draft: SettingsDraft): Partial<Config> {
         maxIterations: requiredNumber(a.maxIterations, "maxIterations"),
         maxToolResultChars: requiredNumber(a.maxToolResultChars, "maxToolResultChars"),
         contextWindowTokens: optionalNumber(a.contextWindowTokens),
+        outputReserveTokens: requiredNumber(a.outputReserveTokens, "outputReserveTokens"),
         params: {}
       }])
     ),

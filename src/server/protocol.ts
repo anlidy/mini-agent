@@ -9,7 +9,7 @@ export type ServerMessage =
   | { type: "session"; key: string }
   | AgentEvent
   | { type: "approve_request"; id: string; command: string }
-  | { type: "turn_rejected"; reason: string };
+  | { type: "turn_rejected"; reason: string; code?: string };
 
 export function parseClientMessage(raw: string): ClientMessage {
   const parsed = JSON.parse(raw) as unknown;

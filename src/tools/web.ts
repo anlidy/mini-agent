@@ -20,6 +20,7 @@ export function createWebTools(options: CreateWebToolsOptions = {}): Tool[] {
   return [
     {
       name: "web_fetch",
+      compactable: true,
       description: "Fetch an http(s) URL and return text content with an external content banner.",
       readOnly: true,
       parameters: {
@@ -45,6 +46,7 @@ export function createWebTools(options: CreateWebToolsOptions = {}): Tool[] {
     },
     {
       name: "web_search",
+      compactable: true,
       description: "Search the web through a configured search backend. Returns ranked title/url/snippet results.",
       readOnly: true,
       parameters: {
@@ -185,4 +187,3 @@ function htmlToText(html: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
-

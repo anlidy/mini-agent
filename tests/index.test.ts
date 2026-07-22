@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { createAgent, version } from "../src/index.js";
 import type { LLMProvider } from "../src/providers/Provider.js";
@@ -9,6 +12,7 @@ describe("package entrypoint", () => {
   });
 
   it("creates an agent with the direct run API", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-entrypoint-"));
     const provider: LLMProvider = {
       defaultModel: () => "test-model",
       async chat() {
@@ -21,7 +25,7 @@ describe("package entrypoint", () => {
         };
       }
     };
-    const agent = createAgent({ workspace: "/tmp/mini-agent-test", maxIterations: 3, provider });
+    const agent = createAgent({ workspace, runtimeHome: path.join(workspace, "runtime"), maxIterations: 3, provider });
 
     const result = await agent.run("hello", { sessionKey: "test:default" });
 

@@ -5,7 +5,7 @@ import { json, readJson, type HttpRouter } from "../httpRouter.js";
 export interface ConfigState {
   config: Config;
   version: number;
-  workspace: string;
+  runtimeHome: string;
   update(config: Config): void;
 }
 
@@ -31,7 +31,7 @@ export function registerConfigRoutes(router: HttpRouter, state: ConfigState): vo
 
   router.add("PUT", "/api/config", async (req, res) => {
     const patch = await readJson(req) as ConfigPatch;
-    const updated = await writeConfig(patch, state.workspace);
+    const updated = await writeConfig(patch, state.runtimeHome);
     state.update(updated);
     await json(res, redactConfig(updated));
   });

@@ -1,7 +1,7 @@
 import { shouldExecuteToolCalls, type LLMProvider, type LLMResponse, type ThinkingConfig, type ToolCallRequest } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import { AgentHook, type AgentHookContext } from "./hooks.js";
-import { HeuristicTokenCounter, estimateMessagesTokens, estimateMessageTokens, type TokenCounter } from "./tokens.js";
+import { HeuristicTokenCounter, estimateMessagesTokens, type TokenCounter } from "./tokens.js";
 import type { AgentEvent } from "./events.js";
 
 export type AgentMessage = Record<string, unknown>;
@@ -15,6 +15,7 @@ export interface AgentRunSpec {
   workspace?: string;
   hook?: AgentHook;
   contextWindowTokens?: number;
+  outputReserveTokens?: number;
   compactToolResultsKeepRecent?: number;
   tokenCounter?: TokenCounter;
   thinking?: ThinkingConfig;
@@ -82,6 +83,9 @@ export class AgentRunner {
       try {
         response = yield* this.streamResponse(spec, messages, streaming);
       } catch (error) {
+        if (error instanceof ContextBudgetError) {
+          throw error;
+        }
         if (spec.signal?.aborted) {
           yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents, reasoningContent) };
           return;
@@ -229,8 +233,16 @@ export class AgentRunner {
   }
 }
 
+export class ContextBudgetError extends Error {
+  readonly code = "context_budget";
+
+  constructor(required: number, available: number) {
+    super(`Required context needs ${required} tokens, but the model window allows ${available}.`);
+    this.name = "ContextBudgetError";
+  }
+}
+
 const MISSING_TOOL_RESULT = "[Tool result unavailable - call was interrupted or lost]";
-const COMPACTABLE_TOOLS = new Set(["read_file", "grep", "find_files", "web_search", "web_fetch", "list_dir"]);
 const DEFAULT_COMPACT_KEEP_RECENT = 10;
 const COMPACT_MIN_CHARS = 500;
 
@@ -259,8 +271,8 @@ function prepareMessagesForModel(messages: AgentMessage[], spec: AgentRunSpec): 
   let prepared = messages.map((message) => ({ ...message }));
   prepared = dropOrphanToolResults(prepared);
   prepared = backfillMissingToolResults(prepared);
-  prepared = compactOldToolResults(prepared, spec.compactToolResultsKeepRecent ?? DEFAULT_COMPACT_KEEP_RECENT);
-  prepared = trimToContextBudget(prepared, counter, spec.contextWindowTokens);
+  prepared = compactOldToolResults(prepared, spec.tools, spec.compactToolResultsKeepRecent ?? DEFAULT_COMPACT_KEEP_RECENT);
+  prepared = trimToContextBudget(prepared, counter, spec);
   prepared = dropOrphanToolResults(prepared);
   prepared = backfillMissingToolResults(prepared);
   return prepared;
@@ -379,10 +391,10 @@ function backfillMissingToolResults(messages: AgentMessage[]): AgentMessage[] {
   return prepared;
 }
 
-function compactOldToolResults(messages: AgentMessage[], keepRecent: number): AgentMessage[] {
+function compactOldToolResults(messages: AgentMessage[], tools: ToolRegistry, keepRecent: number): AgentMessage[] {
   const compactableIndexes = messages
     .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.role === "tool" && typeof message.name === "string" && COMPACTABLE_TOOLS.has(message.name));
+    .filter(({ message }) => message.role === "tool" && typeof message.name === "string" && tools.get(message.name)?.compactable === true);
   const stale = compactableIndexes.slice(0, Math.max(0, compactableIndexes.length - keepRecent));
   const staleIndexes = new Set(stale.map(({ index }) => index));
 
@@ -397,32 +409,47 @@ function compactOldToolResults(messages: AgentMessage[], keepRecent: number): Ag
   });
 }
 
-function trimToContextBudget(messages: AgentMessage[], counter: TokenCounter, contextWindowTokens?: number): AgentMessage[] {
+function trimToContextBudget(messages: AgentMessage[], counter: TokenCounter, spec: AgentRunSpec): AgentMessage[] {
+  const contextWindowTokens = spec.contextWindowTokens;
   if (!contextWindowTokens || contextWindowTokens <= 0) {
     return messages;
   }
 
   const systemMessages = messages.filter((message) => message.role === "system");
   const nonSystem = messages.filter((message) => message.role !== "system");
-  const kept: AgentMessage[] = [];
-  let used = estimateMessagesTokens(counter, systemMessages);
-
-  for (let index = nonSystem.length - 1; index >= 0; index -= 1) {
-    const message = nonSystem[index];
-    if (!message) {
-      continue;
-    }
-    const tokens = estimateMessageTokens(counter, message);
-    if (kept.length > 0 && used + tokens > contextWindowTokens) {
-      break;
-    }
-    kept.unshift(message);
-    used += tokens;
+  const turns = groupUserTurns(nonSystem);
+  const currentTurn = turns.at(-1) ?? [];
+  const toolDefinitionTokens = counter.count(JSON.stringify(spec.tools.getDefinitions()));
+  const outputReserve = spec.outputReserveTokens ?? 0;
+  const required = estimateMessagesTokens(counter, [...systemMessages, ...currentTurn]) + toolDefinitionTokens + outputReserve;
+  if (required > contextWindowTokens) {
+    throw new ContextBudgetError(required, contextWindowTokens);
   }
 
-  const firstUserIndex = kept.findIndex((message) => message.role === "user");
-  const aligned = firstUserIndex > 0 ? kept.slice(firstUserIndex) : kept;
-  return [...systemMessages, ...aligned];
+  const keptTurns: AgentMessage[][] = [currentTurn];
+  let used = required;
+  for (let index = turns.length - 2; index >= 0; index -= 1) {
+    const turn = turns[index]!;
+    const tokens = estimateMessagesTokens(counter, turn);
+    if (used + tokens > contextWindowTokens) break;
+    keptTurns.unshift(turn);
+    used += tokens;
+  }
+  return [...systemMessages, ...keptTurns.flat()];
+}
+
+function groupUserTurns(messages: AgentMessage[]): AgentMessage[][] {
+  const turns: AgentMessage[][] = [];
+  let current: AgentMessage[] = [];
+  for (const message of messages) {
+    if (message.role === "user" && current.length > 0) {
+      if (current.some((item) => item.role === "user")) turns.push(current);
+      current = [];
+    }
+    current.push(message);
+  }
+  if (current.some((item) => item.role === "user")) turns.push(current);
+  return turns;
 }
 
 function extractToolCalls(message: AgentMessage): Array<{ id: string; name: string }> {

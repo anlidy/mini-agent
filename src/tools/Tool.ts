@@ -17,5 +17,7 @@ export interface Tool {
   parameters: JSONSchema;
   readOnly?: boolean;
   exclusive?: boolean;
+  /** Old results may be summarized when the context budget is tight. */
+  compactable?: boolean;
   execute(args: Record<string, unknown>, context: ToolExecutionContext): Promise<unknown>;
 }

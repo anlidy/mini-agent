@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli.js";
 import { OpenAIProvider } from "../../src/providers/OpenAIProvider.js";
 import type { ProviderStreamEvent } from "../../src/providers/Provider.js";
+import { safeSessionFilename, SessionManager } from "../../src/session/SessionManager.js";
 
 describe("CLI REPL", () => {
   afterEach(() => {
@@ -15,20 +16,15 @@ describe("CLI REPL", () => {
   });
   it("lists resumed session history before accepting new input", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-cli-"));
-    const sessionDir = path.join(workspace, ".mini-agent", "workspace", "sessions");
-    await import("node:fs/promises").then((fs) => fs.mkdir(sessionDir, { recursive: true }));
-    await writeFile(
-      path.join(sessionDir, "demo.jsonl"),
-      JSON.stringify({
-        _type: "metadata",
-        key: "demo",
-        created_at: "2026-06-04T00:00:00.000Z",
-        updated_at: "2026-06-04T00:00:01.000Z",
-        metadata: { source: "cli", title: "old question" }
-      }) + "\n" +
-      JSON.stringify({ role: "user", content: "old question", timestamp: "2026-06-04T00:00:00.000Z" }) + "\n" +
-      JSON.stringify({ role: "assistant", content: "old answer", timestamp: "2026-06-04T00:00:01.000Z" }) + "\n"
+    const runtimeHome = path.join(workspace, "runtime");
+    const sessionDir = path.join(runtimeHome, "sessions");
+    const manager = new SessionManager({ sessionsDir: sessionDir, source: "cli" });
+    const initial = await manager.create("demo", { workspace });
+    initial.messages.push(
+      { role: "user", content: "old question", timestamp: "2026-06-04T00:00:00.000Z" },
+      { role: "assistant", content: "old answer", timestamp: "2026-06-04T00:00:01.000Z" }
     );
+    await manager.save(initial);
 
     const input = new PassThrough();
     const chunks: string[] = [];
@@ -49,21 +45,23 @@ describe("CLI REPL", () => {
       "--resume"
       ],
       input,
-      output
+      output,
+      runtimeHome
     });
 
     const text = chunks.join("");
     expect(text).toContain("Resumed session demo");
     expect(text).toContain("old question");
     expect(text).toContain("old answer");
-    await expect(readFile(path.join(sessionDir, "demo.jsonl"), "utf8")).resolves.toContain("old answer");
+    await expect(readFile(path.join(sessionDir, `${safeSessionFilename("demo")}.jsonl`), "utf8")).resolves.toContain("old answer");
   });
 
   it("streams assistant tokens live when --stream is passed", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-cli-stream-"));
-    await import("node:fs/promises").then((fs) => fs.mkdir(path.join(workspace, ".mini-agent"), { recursive: true }));
+    const runtimeHome = path.join(workspace, "runtime");
+    await import("node:fs/promises").then((fs) => fs.mkdir(runtimeHome, { recursive: true }));
     await writeFile(
-      path.join(workspace, ".mini-agent", "config.json"),
+      path.join(runtimeHome, "config.json"),
       JSON.stringify({ providers: { deepseek: { type: "openai", apiKey: "test-key" } } }) + "\n"
     );
     vi.spyOn(OpenAIProvider.prototype, "chatStream").mockImplementation(async function* (): AsyncIterable<ProviderStreamEvent> {
@@ -82,12 +80,12 @@ describe("CLI REPL", () => {
     });
     input.end("hello\n/exit\n");
 
-    await runCli({ argv: ["--workspace", workspace, "--session", "s", "--stream"], input, output });
+    await runCli({ argv: ["--workspace", workspace, "--session", "s", "--stream"], input, output, runtimeHome });
 
     const text = chunks.join("");
     expect(text).toContain("assistant> Streaming!");
     expect(text).toContain("usage> total_tokens=4");
-    await expect(readFile(path.join(workspace, ".mini-agent", "workspace", "sessions", "s.jsonl"), "utf8"))
+    await expect(readFile(path.join(runtimeHome, "sessions", `${safeSessionFilename("s")}.jsonl`), "utf8"))
       .resolves.toContain("Streaming!");
   });
 
@@ -107,7 +105,7 @@ describe("CLI REPL", () => {
     const command = `/tool apply_patch ${JSON.stringify({ patch })}\n/exit\n`;
     const text = await runRepl(workspace, command);
     expect(text).toContain("created.txt");
-    await expect(readFile(path.join(workspace, ".mini-agent", "created.txt"), "utf8")).resolves.toBe("made by /tool\n");
+    await expect(readFile(path.join(workspace, "created.txt"), "utf8")).resolves.toBe("made by /tool\n");
   });
 
   it("reports invalid JSON args for /tool", async () => {
@@ -118,19 +116,20 @@ describe("CLI REPL", () => {
 
   it("prints a clean config error instead of a stack trace", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-cli-badcfg-"));
-    await import("node:fs/promises").then((fs) => fs.mkdir(path.join(workspace, ".mini-agent"), { recursive: true }));
+    const runtimeHome = path.join(workspace, "runtime");
+    await import("node:fs/promises").then((fs) => fs.mkdir(runtimeHome, { recursive: true }));
     await writeFile(
-      path.join(workspace, ".mini-agent", "config.json"),
+      path.join(runtimeHome, "config.json"),
       JSON.stringify({ agents: { default: { maxIterations: "lots" } } }) + "\n"
     );
-    const text = await runRepl(workspace, "");
+    const text = await runRepl(workspace, "", runtimeHome);
     expect(text).toContain("Config error");
     expect(text).toContain("agents.default.maxIterations");
     expect(text).not.toContain("at ensureDefaultConfig");
   });
 });
 
-async function runRepl(workspace: string, stdinText: string): Promise<string> {
+async function runRepl(workspace: string, stdinText: string, runtimeHome = path.join(workspace, "runtime")): Promise<string> {
   const input = new PassThrough();
   const chunks: string[] = [];
   const output = new Writable({
@@ -140,6 +139,6 @@ async function runRepl(workspace: string, stdinText: string): Promise<string> {
     }
   });
   input.end(stdinText);
-  await runCli({ argv: ["--workspace", workspace, "--session", "v"], input, output });
+  await runCli({ argv: ["--workspace", workspace, "--session", "v"], input, output, runtimeHome });
   return chunks.join("");
 }

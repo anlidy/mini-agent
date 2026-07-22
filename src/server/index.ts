@@ -1,6 +1,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stat } from "node:fs/promises";
 import { WebSocketServer } from "ws";
 
 import type { Config } from "../config/Config.js";
@@ -14,6 +15,7 @@ import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerToolRoutes } from "./routes/tools.js";
 import { serveStatic } from "./static.js";
 import { handleWebSocketUpgrade } from "./wsHandler.js";
+import { RuntimePaths } from "../runtime/paths.js";
 
 export interface CreateServerOptions {
   workspace?: string;
@@ -22,6 +24,7 @@ export interface CreateServerOptions {
   staticDir?: string;
   providerFactory?: (config: Config) => LLMProvider;
   approvalTimeoutMs?: number;
+  runtimeHome?: string;
 }
 
 export interface MiniAgentServer {
@@ -34,8 +37,6 @@ export interface MiniAgentServer {
 
 export async function createServer(options: CreateServerOptions = {}): Promise<MiniAgentServer> {
   const handler = await createRequestHandler(options);
-  const projectRoot = path.resolve(options.workspace ?? process.cwd());
-  const configDir = path.join(projectRoot, ".mini-agent");
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 3210;
   const server = createHttpServer(handler.handle);
@@ -43,7 +44,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
 
   server.on("upgrade", (req, socket, head) => {
     const handled = handleWebSocketUpgrade(req, socket, head, wss, {
-      workspace: configDir,
+      workspace: handler.paths.projectWorkspace,
+      runtimeHome: handler.paths.home,
       state: handler.state,
       sessions: handler.sessions,
       providerFactory: options.providerFactory,
@@ -89,28 +91,33 @@ export async function createServer(options: CreateServerOptions = {}): Promise<M
 export interface MiniAgentRequestHandler {
   state: ConfigState;
   sessions: SessionManager;
+  paths: RuntimePaths;
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 }
 
 export async function createRequestHandler(options: CreateServerOptions = {}): Promise<MiniAgentRequestHandler> {
-  const projectRoot = path.resolve(options.workspace ?? process.cwd());
-  const configDir = path.join(projectRoot, ".mini-agent");
+  const requestedPaths = new RuntimePaths({ home: options.runtimeHome, workspace: options.workspace });
+  const projectWorkspace = await requestedPaths.normalizeWorkspace(requestedPaths.projectWorkspace);
+  const paths = new RuntimePaths({ home: requestedPaths.home, workspace: projectWorkspace });
+  await warnLegacyData(paths);
+  const configDir = paths.home;
   const staticDir = options.staticDir ?? defaultStaticDir();
   const state = createConfigState(await ensureDefaultConfig(configDir), configDir);
   const sessions = new SessionManager({
-    sessionsDir: state.config.sessions.dir,
+    sessionsDir: paths.sessionsDir,
     source: "webui"
   });
   const router = new HttpRouter();
 
-  registerSessionRoutes(router, sessions);
+  registerSessionRoutes(router, sessions, paths);
   registerConfigRoutes(router, state);
-  registerToolRoutes(router, state);
-  registerFileRoutes(router, projectRoot);
+  registerToolRoutes(router, state, paths.skillsDir);
+  registerFileRoutes(router, sessions, paths);
 
   return {
     state,
     sessions,
+    paths,
     async handle(req, res) {
       if (await router.handle(req, res)) {
         return;
@@ -118,6 +125,14 @@ export async function createRequestHandler(options: CreateServerOptions = {}): P
       await serveStatic(req, res, staticDir);
     }
   };
+}
+
+async function warnLegacyData(paths: RuntimePaths): Promise<void> {
+  if (paths.legacyHome() === paths.home) return;
+  const exists = await stat(paths.legacyHome()).then((info) => info.isDirectory()).catch(() => false);
+  if (exists) {
+    process.stderr.write(`Legacy runtime data found at ${paths.legacyHome()}. Run mini-agent import --workspace ${paths.projectWorkspace} to preview an explicit import.\n`);
+  }
 }
 
 export async function startServer(options: CreateServerOptions = {}): Promise<MiniAgentServer> {
@@ -133,11 +148,11 @@ function defaultStaticDir(): string {
     : path.resolve(moduleDir, "..", "webui");
 }
 
-function createConfigState(initial: Config, workspace: string): ConfigState {
+function createConfigState(initial: Config, runtimeHome: string): ConfigState {
   return {
     config: initial,
     version: 0,
-    workspace,
+    runtimeHome,
     update(config: Config) {
       this.config = config;
       this.version += 1;

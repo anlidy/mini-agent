@@ -1,10 +1,13 @@
 export interface SessionSummary {
   key: string;
+  version: 0 | 1;
+  revision: number;
   createdAt: string;
   updatedAt: string;
   messageCount: number;
   title: string;
   workspace?: string;
+  effectiveWorkspace: string;
 }
 
 export interface MessageRecord {
@@ -18,11 +21,14 @@ export interface MessageRecord {
 }
 
 export interface Session {
+  version: 0 | 1;
   key: string;
+  revision: number;
   messages: MessageRecord[];
   createdAt: string;
   updatedAt: string;
   metadata: Record<string, unknown>;
+  effectiveWorkspace: string;
 }
 
 export interface FileTreeNode {
@@ -46,6 +52,7 @@ export interface AgentConfig {
   maxIterations: number;
   maxToolResultChars: number;
   contextWindowTokens?: number;
+  outputReserveTokens?: number;
   params: Record<string, unknown>;
 }
 

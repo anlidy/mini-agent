@@ -1,5 +1,16 @@
 # Roadmap
 
+## Runtime Foundation Hardening ✅ (2026-07-22)
+
+- [x] Session v1 headers, SHA-256 filenames, strict JSONL parsing, lock-file CAS, stale-lock recovery, and v0-on-save upgrade
+- [x] Per-session turn leases and commit-before-`done`; abort/provider/save/conflict failures do not enter history
+- [x] Global Runtime Home (`MINI_AGENT_HOME`, default `~/.mini-agent`) separated from canonical project workspaces and per-session scratch
+- [x] Explicit dry-run-first `mini-agent import --workspace ... [--apply]`; no automatic migration or merge
+- [x] Explicit Session POST, revision PATCH, nullable workspace, stable REST error codes, and Session-scoped file APIs
+- [x] One Runner token budget over system/tools/current turn/output reserve with complete-turn trimming
+- [x] Validated global/project Skill catalog with project override and catalog-backed `read_skill`
+- [x] `.mini-agent/project.json` overrides intentionally deferred pending a separate field/precedence design
+
 ## Phase 1 — Core Agent Runtime ✅
 
 Completed. See `docs/archive/` for the original scope and checklist.
@@ -31,7 +42,7 @@ Core improvements needed before building the Web UI. Completed on branch
 
 - [x] Thread an `AbortSignal` from AgentLoop.run/stream options
 - [x] Wire abort signal through to provider HTTP requests (composed with timeout)
-- [x] Graceful stop — exit iteration loop cleanly on abort (`stopReason: "aborted"`)
+- [x] Graceful stop — abort ends with a terminal error and leaves persisted history unchanged
 
 ### Agent Event API
 

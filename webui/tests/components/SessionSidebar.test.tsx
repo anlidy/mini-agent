@@ -33,7 +33,7 @@ function renderWithRouter(ui: React.ReactElement) {
 /* ------------------------------------------------------------------ */
 
 function sessionSummary(key: string): SessionSummary {
-  return { key, createdAt: "", updatedAt: "", messageCount: 1, title: "" };
+  return { key, version: 1, revision: 1, createdAt: "", updatedAt: "", messageCount: 1, title: "", effectiveWorkspace: "/tmp/scratch" };
 }
 
 const defaultProps = {

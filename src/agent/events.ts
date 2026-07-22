@@ -9,4 +9,4 @@ export type AgentEvent =
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; status: "ok" | "error"; content: string }
   | { type: "done"; result: AgentRunResult }
-  | { type: "error"; error: string };
+  | { type: "error"; error: string; code?: string };

@@ -15,10 +15,10 @@ A TypeScript AI agent runtime — define an agent contract, connect via protocol
 - **Tool System** — extensible `ToolRegistry` with JSON Schema validation
 - **Built-in Tools** — read/write files, list directories, find files, grep, web fetch, web search, apply patch, opt-in exec
 - **Multi-Provider** — OpenAI-compatible + Anthropic Messages API, with message format conversion
-- **Session Persistence** — JSONL-based storage with atomic writes, metadata headers, history trimming
+- **Session Persistence** — revisioned JSONL snapshots with CAS, lock files, and atomic commit-before-`done`
 - **Context Management** — pluggable token counting, context window budgeting, tool result summarization
 - **Config Validation** — zod-validated `.mini-agent/config.json` with clear errors
-- **Skills Framework** — workspace-level skills with YAML frontmatter and auto-injection
+- **Skills Framework** — validated global/project catalogs with project override and a bounded `read_skill` tool
 - **Hook System** — lifecycle hooks for tool execution, iteration tracking, and custom middleware
 - **Reference Clients** — CLI REPL and Web UI (React + Tailwind) built on the same protocol
 
@@ -39,13 +39,20 @@ npm run build
 ### Library usage (programmatic, in-process)
 
 ```ts
-import { createAgent, DirectAgentClient, SessionManager } from "mini-agent";
+import {
+  createAgent,
+  createDefaultToolRegistry,
+  DirectAgentClient,
+  SessionManager
+} from "mini-agent";
 
-const agent = createAgent({ workspace: "/my-project" });
-const sessions = new SessionManager({ sessionsDir: "/my-project/.mini-agent/workspace/sessions" });
+const runtimeHome = process.env.MINI_AGENT_HOME ?? `${process.env.HOME}/.mini-agent`;
+const agent = createAgent({ workspace: "/my-project", runtimeHome });
+const sessionManager = new SessionManager({ sessionsDir: `${runtimeHome}/sessions` });
 const tools = createDefaultToolRegistry();
 
-const client = new DirectAgentClient({ agent, sessions, tools });
+const client = new DirectAgentClient({ agent, sessions: sessionManager, tools, workspace: "/my-project", runtimeHome });
+await client.createSession({ key: "work-001", workspace: "/my-project" });
 
 for await (const event of client.runTurn("Read README.md and summarize it.", {
   sessionKey: "work-001"
@@ -55,7 +62,7 @@ for await (const event of client.runTurn("Read README.md and summarize it.", {
 }
 
 // Session management through the same client
-const sessions = await client.listSessions();
+const savedSessions = await client.listSessions();
 await client.deleteSession("work-001");
 ```
 
@@ -79,9 +86,16 @@ Send JSON messages: `{"type":"user_message","text":"..."}`, `{"type":"abort"}`, 
 node dist/cli.js --session default --resume
 ```
 
-The first run auto-creates `.mini-agent/config.json` and `.mini-agent/workspace/sessions/`.
+The first run auto-creates `$MINI_AGENT_HOME/config.json` and `$MINI_AGENT_HOME/sessions/` (`MINI_AGENT_HOME` defaults to `~/.mini-agent`). `--workspace` selects only the project working directory.
 
-Edit `.mini-agent/config.json` to set `apiKey`, `baseUrl`, `model`, or toggle `exec.enabled`.
+Edit `$MINI_AGENT_HOME/config.json` to set `apiKey`, `baseUrl`, `model`, or toggle `exec.enabled`.
+
+Legacy project-local data is never copied automatically. Preview and apply an import explicitly:
+
+```bash
+mini-agent import --workspace /path/to/project
+mini-agent import --workspace /path/to/project --apply
+```
 
 Inside the REPL:
 - Type a message and press Enter to talk to the agent.
@@ -147,14 +161,15 @@ See `docs/ARCHITECTURE.md` for detailed design and `docs/ROADMAP.md` for planned
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/sessions` | List saved sessions |
-| `GET` | `/api/sessions/:key` | Read a full session |
-| `PATCH` | `/api/sessions/:key` | Update session metadata |
+| `POST` | `/api/sessions` | Explicitly create a session |
+| `GET` | `/api/sessions/:key` | Read a full session (404 when absent) |
+| `PATCH` | `/api/sessions/:key` | Update metadata with `revision`; `workspace` may be `null` |
 | `DELETE` | `/api/sessions/:key` | Delete a session |
 | `GET` | `/api/config` | Read config (apiKey redacted) |
 | `PUT` | `/api/config` | Write config patches atomically |
 | `GET` | `/api/tools` | List tool definitions |
-| `GET` | `/api/files/tree?path=.` | Directory tree (workspace-scoped) |
-| `GET` | `/api/files/content?path=README.md` | File content (workspace-scoped) |
+| `GET` | `/api/sessions/:key/files/tree?path=.` | Session-workspace directory tree |
+| `GET` | `/api/sessions/:key/files/content?path=README.md` | Session-workspace file content |
 
 ## Built-In Tools
 
@@ -168,17 +183,18 @@ See `docs/ARCHITECTURE.md` for detailed design and `docs/ROADMAP.md` for planned
 | `web_fetch` | Fetch an HTTP/HTTPS URL, convert HTML to text |
 | `web_search` | Search the web via DuckDuckGo backend (configurable) |
 | `apply_patch` | Apply a unified-diff patch with fuzzy hunk matching and dry-run |
+| `read_skill` | Read a validated skill by catalog id |
 | `exec` | Run a shell command — **opt-in** via `exec.enabled`, deny-listed, approval-gated |
 
 All file tools are workspace-scoped and reject paths that escape the workspace.
 
 ## Sessions
 
-Sessions are stored as JSONL under `.mini-agent/workspace/sessions/{key}.jsonl`. The first line is a metadata record; remaining lines are message records. Tool calls and results are preserved so resumed conversations continue with full context.
+Sessions live only under `$MINI_AGENT_HOME/sessions/`; filenames are full SHA-256 hashes of their canonical keys. The v1 header records `version`, `revision`, `message_count`, timestamps, and metadata. Saves use a short lock plus revision CAS and atomic rename. A streamed `done` means the completed/max-iteration result is already durable; abort, provider failure, conflict, and save failure end with `error` and do not change history. Tool side effects already executed before a failed commit cannot be rolled back.
 
 ## Skills
 
-Workspace skills can be added under `skills/{name}/SKILL.md`:
+Global skills live at `$MINI_AGENT_HOME/skills/{id}/SKILL.md`; project skills live at `<workspace>/skills/{id}/SKILL.md` and override a global skill with the same id:
 
 ```markdown
 ---
@@ -190,14 +206,14 @@ always: true
 Use this skill when working in this repository.
 ```
 
-Skills are discovered at runtime and injected into the system prompt.
+The directory name is the stable id and must exactly match frontmatter `name`; `description` is required. The catalog summary is placed in the prompt and full content is read only through `read_skill`. `always` is displayed but is not auto-executed or auto-injected in this phase.
 
 ## Scripts
 
 ```bash
 npm run repl          # start CLI REPL
 npm run build         # compile TypeScript to dist/
-npm test              # run Vitest tests (includes webui/tests/)
+npm test              # run backend Vitest tests
 npm run typecheck     # run TypeScript type checking
 npm run server:dev    # start backend dev server (tsx watch, :3210)
 npm run web:dev       # start Vite for the React frontend (:5173)

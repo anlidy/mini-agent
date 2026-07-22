@@ -18,14 +18,19 @@ export interface SessionMetadata {
 
 export interface SessionHeader {
   _type: "metadata";
+  version: 1;
   key: string;
+  revision: number;
+  message_count: number;
   created_at: string;
   updated_at: string;
   metadata: SessionMetadata;
 }
 
 export interface Session {
+  version: 0 | 1;
   key: string;
+  revision: number;
   messages: MessageRecord[];
   createdAt: string;
   updatedAt: string;

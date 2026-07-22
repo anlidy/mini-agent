@@ -20,20 +20,26 @@ function jsonResponse(body: unknown, status = 200): Response {
 function sessionSummary(key: string): SessionSummary {
   return {
     key,
+    version: 1,
+    revision: 1,
     createdAt: "",
     updatedAt: "",
     messageCount: 1,
-    title: ""
+    title: "",
+    effectiveWorkspace: "/tmp/scratch"
   };
 }
 
 function session(key: string): Session {
   return {
     key,
+    version: 1,
+    revision: 1,
     messages: [],
     createdAt: "",
     updatedAt: "",
-    metadata: {}
+    metadata: {},
+    effectiveWorkspace: "/tmp/scratch"
   };
 }
 
@@ -197,5 +203,31 @@ describe("useSessions", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/other", expect.objectContaining({ method: "DELETE" }));
     await waitFor(() => expect(result.current.activeSession?.key).toBe("default"));
+  });
+
+  it("creates with POST and sends the current revision on PATCH conflicts", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestPath = String(input);
+      if (init?.method === "POST") return jsonResponse(session("created"), 201);
+      if (init?.method === "PATCH") {
+        expect(JSON.parse(String(init.body))).toMatchObject({ revision: 1, workspace: null });
+        return jsonResponse({ error: "changed", code: "session_conflict" }, 409);
+      }
+      if (requestPath === "/api/sessions") return jsonResponse([sessionSummary("default")]);
+      return jsonResponse(session("default"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useSessions("default"));
+    await act(async () => { await result.current.loadSession("default"); });
+
+    await act(async () => {
+      await result.current.createSession({ workspace: null });
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions", expect.objectContaining({ method: "POST" }));
+
+    await act(async () => {
+      await expect(result.current.patchSession("default", { workspace: null })).rejects.toThrow("changed");
+    });
+    await waitFor(() => expect(result.current.error).toBe("changed"));
   });
 });

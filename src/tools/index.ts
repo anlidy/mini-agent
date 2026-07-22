@@ -4,6 +4,7 @@ import { createPatchTool } from "./patch.js";
 import { createSearchTools } from "./search.js";
 import { ToolRegistry } from "./ToolRegistry.js";
 import { createWebTools, type WebSearchConfig } from "./web.js";
+export { createReadSkillTool } from "./skills.js";
 
 export interface ExecConfig extends ExecToolOptions {
   enabled: boolean;

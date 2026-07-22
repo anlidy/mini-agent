@@ -3,13 +3,14 @@ import path from "node:path";
 
 import type { AgentConfig, Config, ProviderConfig } from "./Config.js";
 import { parseConfig } from "./schema.js";
+import { resolveRuntimeHome } from "../runtime/paths.js";
 
 export const REDACTED_API_KEY = "***";
 
 export type ConfigPatch = Partial<Config>;
 
 export function defaultConfig(configDir?: string): Config {
-  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const cdir = resolveRuntimeHome(configDir);
   return {
     agents: {
       default: {
@@ -20,6 +21,7 @@ export function defaultConfig(configDir?: string): Config {
         maxIterations: 100,
         maxToolResultChars: 64_000,
         contextWindowTokens: 32_000,
+        outputReserveTokens: 4_096,
         params: {}
       }
     },
@@ -31,7 +33,7 @@ export function defaultConfig(configDir?: string): Config {
       }
     },
     sessions: {
-      dir: path.join(cdir, "workspace", "sessions"),
+      dir: path.join(cdir, "sessions"),
       maxHistoryMessages: 50,
       maxHistoryChars: 200_000
     },
@@ -40,7 +42,7 @@ export function defaultConfig(configDir?: string): Config {
 }
 
 export async function ensureDefaultConfig(configDir?: string): Promise<Config> {
-  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const cdir = resolveRuntimeHome(configDir);
   const configPath = configFilePath(cdir);
   try {
     return await loadConfig(cdir);
@@ -57,7 +59,7 @@ export async function ensureDefaultConfig(configDir?: string): Promise<Config> {
 }
 
 export async function loadConfig(configDir?: string): Promise<Config> {
-  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const cdir = resolveRuntimeHome(configDir);
   const raw = await readFile(configFilePath(cdir), "utf8");
   const parsed = JSON.parse(raw) as Partial<Config>;
   const defaults = defaultConfig(cdir);
@@ -73,7 +75,7 @@ export async function loadConfig(configDir?: string): Promise<Config> {
 }
 
 export async function writeConfig(patch: ConfigPatch, configDir?: string): Promise<Config> {
-  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const cdir = resolveRuntimeHome(configDir);
   const current = await ensureDefaultConfig(cdir);
 
   const merged: Config = {
@@ -114,7 +116,7 @@ export async function writeConfig(patch: ConfigPatch, configDir?: string): Promi
 }
 
 export function configFilePath(configDir?: string): string {
-  const cdir = configDir ?? path.join(process.cwd(), ".mini-agent");
+  const cdir = resolveRuntimeHome(configDir);
   return path.join(cdir, "config.json");
 }
 

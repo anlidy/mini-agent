@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { ContextBuilder } from "./ContextBuilder.js";
 import { AgentRunner, type AgentRunSpec, type AgentRunResult } from "./AgentRunner.js";
 import type { Config } from "../config/Config.js";
@@ -8,11 +6,13 @@ import { createProvider } from "../providers/factory.js";
 import { SessionManager } from "../session/SessionManager.js";
 import { SkillsLoader } from "../skills/SkillsLoader.js";
 import { createDefaultToolRegistry } from "../tools/index.js";
+import { createReadSkillTool } from "../tools/skills.js";
 import type { Agent, AgentOptions, RunOptions, RunResult } from "./types.js";
 import type { AgentEvent } from "./events.js";
 import type { LLMProvider } from "../providers/Provider.js";
 import type { ToolRegistry } from "../tools/ToolRegistry.js";
 import type { MessageRecord, Session } from "../session/Session.js";
+import { RuntimePaths } from "../runtime/paths.js";
 
 interface PreparedRun {
   runner: AgentRunner;
@@ -22,10 +22,22 @@ interface PreparedRun {
   sessionKey: string;
   input: string;
   initialMessages: AgentRunSpec["initialMessages"];
+  releaseLease: () => void;
+}
+
+export class AgentTurnError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "AgentTurnError";
+    this.code = code;
+  }
 }
 
 export class AgentLoop implements Agent {
   readonly configDir: string;
+  private readonly paths: RuntimePaths;
   private readonly config?: Config;
   private readonly agentKey: string;
   private readonly modelOverride?: string;
@@ -40,7 +52,8 @@ export class AgentLoop implements Agent {
   private readonly sessionSource?: string;
 
   constructor(options: AgentOptions = {}) {
-    this.configDir = options.workspace ?? path.join(process.cwd(), ".mini-agent");
+    this.paths = new RuntimePaths({ home: options.runtimeHome, workspace: options.workspace });
+    this.configDir = this.paths.home;
     this.config = options.config;
     this.agentKey = options.agentKey ?? "default";
     this.providerOverride = options.provider;
@@ -48,6 +61,9 @@ export class AgentLoop implements Agent {
     this.maxIterationsOverride = options.maxIterations;
     this.maxToolResultCharsOverride = options.maxToolResultChars;
     this.tools = options.tools ?? createDefaultToolRegistry();
+    if (!this.tools.get("read_skill")) {
+      this.tools.register(createReadSkillTool(this.paths.skillsDir));
+    }
     this.approveCommand = options.approveCommand;
     this.sessionsDirOverride = options.sessionsDir;
     this.sessions = options.sessions;
@@ -57,22 +73,42 @@ export class AgentLoop implements Agent {
 
   async run(input: string, options: RunOptions = {}): Promise<RunResult> {
     const prepared = await this.prepare(input, options);
-    const result = await prepared.runner.run(prepared.spec);
-    await this.persist(prepared, result);
-    return this.finish(prepared, result);
+    try {
+      const result = await prepared.runner.run(prepared.spec);
+      assertCommittable(result);
+      await this.persist(prepared, result);
+      return this.finish(prepared, result);
+    } finally {
+      prepared.releaseLease();
+    }
   }
 
   async *stream(input: string, options: RunOptions = {}): AsyncIterable<AgentEvent> {
-    const prepared = await this.prepare(input, options);
-    let result: AgentRunResult | undefined;
-    for await (const event of prepared.runner.runStream(prepared.spec)) {
-      if (event.type === "done") {
-        result = event.result;
+    let prepared: PreparedRun | undefined;
+    try {
+      prepared = await this.prepare(input, options);
+      let result: AgentRunResult | undefined;
+      for await (const event of prepared.runner.runStream(prepared.spec)) {
+        if (event.type === "done") {
+          result = event.result;
+        } else if (event.type !== "error") {
+          yield event;
+        }
       }
-      yield event;
-    }
-    if (result) {
+      if (!result) {
+        throw new AgentTurnError("turn_failed", "Agent runner ended without a result.");
+      }
+      assertCommittable(result);
       await this.persist(prepared, result);
+      yield { type: "done", result };
+    } catch (error) {
+      yield {
+        type: "error",
+        error: error instanceof Error ? error.message : String(error),
+        code: errorCode(error)
+      };
+    } finally {
+      prepared?.releaseLease();
     }
   }
 
@@ -86,61 +122,64 @@ export class AgentLoop implements Agent {
     }
 
     const sessionKey = options.sessionKey ?? this.defaultSessionKey ?? "default";
-    const sessions = this.sessionManager(config.sessions.dir);
-    const session = await sessions.getOrCreate(sessionKey);
+    const sessions = this.sessionManager();
+    const releaseLease = sessions.acquireLease(sessionKey);
+    try {
+      const session = await sessions.getOrCreate(sessionKey);
 
-    // Per-session workspace from metadata; falls back to configDir.
-    const rawWorkspace = (typeof session.metadata.workspace === "string" && session.metadata.workspace)
-      ? session.metadata.workspace
-      : this.configDir;
-    const sessionWorkspace = path.resolve(path.resolve(this.configDir), rawWorkspace);
+      const sessionWorkspace = await this.paths.effectiveWorkspace(session.metadata.workspace, sessionKey);
 
-    const model = this.modelOverride ?? agentConfig.model;
+      const model = this.modelOverride ?? agentConfig.model;
 
-    const provider = this.providerOverride ?? createProvider(agentConfig, config.providers);
+      const provider = this.providerOverride ?? createProvider(agentConfig, config.providers);
 
-    const context = new ContextBuilder({ workspace: sessionWorkspace });
-    const skills = new SkillsLoader(sessionWorkspace);
-    const initialMessages = await context.buildMessages({
-      input,
-      sessionKey,
-      history: sessions.getHistory(session, {
-        maxMessages: config.sessions.maxHistoryMessages,
-        maxChars: config.sessions.maxHistoryChars
-      }),
-      skillsSummary: await skills.summaryText()
-    });
+      const context = new ContextBuilder({ workspace: sessionWorkspace });
+      const skills = new SkillsLoader({ workspace: sessionWorkspace, globalSkillsDir: this.paths.skillsDir });
+      const initialMessages = await context.buildMessages({
+        input,
+        sessionKey,
+        history: sessions.getHistory(session, {
+          maxMessages: config.sessions.maxHistoryMessages
+        }),
+        skillsSummary: await skills.summaryText()
+      });
 
-    const spec: AgentRunSpec = {
-      initialMessages,
-      tools: this.tools,
-      model,
-      maxIterations: this.maxIterationsOverride ?? agentConfig.maxIterations,
-      maxToolResultChars: this.maxToolResultCharsOverride ?? agentConfig.maxToolResultChars,
-      workspace: sessionWorkspace,
-      contextWindowTokens: agentConfig.contextWindowTokens,
-      thinking: agentConfig.thinking,
-      effort: agentConfig.effort,
-      approveCommand: options.approveCommand ?? this.approveCommand,
-      signal: options.signal
-    };
+      const spec: AgentRunSpec = {
+        initialMessages,
+        tools: this.tools,
+        model,
+        maxIterations: this.maxIterationsOverride ?? agentConfig.maxIterations,
+        maxToolResultChars: this.maxToolResultCharsOverride ?? agentConfig.maxToolResultChars,
+        workspace: sessionWorkspace,
+        contextWindowTokens: agentConfig.contextWindowTokens,
+        outputReserveTokens: agentConfig.outputReserveTokens ?? 4_096,
+        thinking: agentConfig.thinking,
+        effort: agentConfig.effort,
+        approveCommand: options.approveCommand ?? this.approveCommand,
+        signal: options.signal
+      };
 
-    return { runner: new AgentRunner(provider), spec, sessions, session, sessionKey, input, initialMessages };
+      return { runner: new AgentRunner(provider), spec, sessions, session, sessionKey, input, initialMessages, releaseLease };
+    } catch (error) {
+      releaseLease();
+      throw error;
+    }
   }
 
-  private async persist(prepared: PreparedRun, result: AgentRunResult): Promise<void> {
-    prepared.session.messages.push(toRecord({ role: "user", content: prepared.input }));
+  private async persist(prepared: PreparedRun, result: AgentRunResult): Promise<Session> {
+    const next = structuredClone(prepared.session);
+    next.messages.push(toRecord({ role: "user", content: prepared.input }));
     for (const message of result.messages.slice(prepared.initialMessages.length)) {
-      prepared.session.messages.push(toRecord(message));
+      next.messages.push(toRecord(message));
     }
     // Attach reasoning content to the last assistant message if present.
     if (result.reasoningContent) {
-      const lastAssistant = findLastAssistantMessage(prepared.session.messages);
+      const lastAssistant = findLastAssistantMessage(next.messages);
       if (lastAssistant) {
         lastAssistant.thinking = result.reasoningContent;
       }
     }
-    await prepared.sessions.save(prepared.session);
+    return prepared.sessions.save(next);
   }
 
   private finish(prepared: PreparedRun, result: AgentRunResult): RunResult {
@@ -152,15 +191,30 @@ export class AgentLoop implements Agent {
     };
   }
 
-  private sessionManager(configSessionsDir: string): SessionManager {
+  private sessionManager(): SessionManager {
     if (!this.sessions) {
       this.sessions = new SessionManager({
-        sessionsDir: this.sessionsDirOverride ?? configSessionsDir,
+        sessionsDir: this.sessionsDirOverride ?? this.paths.sessionsDir,
         source: this.sessionSource
       });
     }
     return this.sessions;
   }
+}
+
+function assertCommittable(result: AgentRunResult): void {
+  if (result.stopReason === "completed" || result.stopReason === "max_iterations") {
+    return;
+  }
+  const code = result.stopReason === "aborted" ? "turn_aborted" : "provider_error";
+  throw new AgentTurnError(code, result.error ?? result.finalContent ?? "Turn failed.");
+}
+
+function errorCode(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return error.code;
+  }
+  return "turn_failed";
 }
 
 export function createAgent(options: AgentOptions = {}): Agent {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -35,5 +35,16 @@ describe("built-in tools", () => {
 
     await expect(registry.execute("read_file", { path: "../outside.txt" }, { workspace }))
       .resolves.toContain("Error");
+  });
+
+  it("rejects reads and writes through symlinks that escape the workspace", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-symlink-boundary-"));
+    const outside = `${workspace}-outside`;
+    await writeFile(outside, "secret");
+    await symlink(outside, path.join(workspace, "outside-link"));
+    const registry = createDefaultToolRegistry();
+    await expect(registry.execute("read_file", { path: "outside-link" }, { workspace })).resolves.toContain("Error");
+    await expect(registry.execute("write_file", { path: "outside-link", content: "overwrite" }, { workspace })).resolves.toContain("Error");
+    await expect(readFile(outside, "utf8")).resolves.toBe("secret");
   });
 });

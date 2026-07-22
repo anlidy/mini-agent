@@ -75,16 +75,18 @@ class FakeSocket implements AgentSocket {
 }
 
 async function setup(workspace: string): Promise<MiniAgentRequestHandler> {
-  const config = defaultConfig(path.join(workspace, ".mini-agent"));
+  const runtimeHome = path.join(workspace, "runtime");
+  const config = defaultConfig(runtimeHome);
   config.providers.deepseek!.apiKey = "secret-key";
-  await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-  await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
-  return createRequestHandler({ workspace });
+  await mkdir(runtimeHome, { recursive: true });
+  await writeFile(path.join(runtimeHome, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  return createRequestHandler({ workspace, runtimeHome });
 }
 
-async function call(handler: MiniAgentRequestHandler, method: string, url: string): Promise<{ status: number; json: unknown }> {
-  const req = Readable.from([]) as IncomingMessage;
-  Object.assign(req, { method, url, headers: {} });
+async function call(handler: MiniAgentRequestHandler, method: string, url: string, body?: unknown): Promise<{ status: number; json: unknown }> {
+  const raw = body === undefined ? "" : JSON.stringify(body);
+  const req = Readable.from(raw ? [raw] : []) as IncomingMessage;
+  Object.assign(req, { method, url, headers: raw ? { "content-type": "application/json" } : {} });
   let responseBody = "";
   const res = new Writable({
     write(chunk, _encoding, callback) {
@@ -116,7 +118,8 @@ describe("session history consistency between HTTP and WebSocket", () => {
     const handler = await setup(workspace);
     const sessionKey = "session-1782036891370";
 
-    // 1. Frontend opens a brand-new session first: HTTP read caches it as empty.
+    // 1. Frontend explicitly creates a session before opening the WebSocket.
+    await call(handler, "POST", "/api/sessions", { key: sessionKey, workspace });
     const before = await call(handler, "GET", `/api/sessions/${sessionKey}`);
     expect((before.json as { messages: unknown[] }).messages).toEqual([]);
 
@@ -124,6 +127,7 @@ describe("session history consistency between HTTP and WebSocket", () => {
     const socket = new FakeSocket();
     bindAgentConnection(socket, new URL(`http://localhost/ws?session=${sessionKey}`), {
       workspace,
+      runtimeHome: handler.paths.home,
       state: handler.state,
       sessions: handler.sessions,
       providerFactory: () => new StreamingProvider("hello from agent"),

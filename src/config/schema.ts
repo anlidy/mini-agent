@@ -25,6 +25,7 @@ const agentConfigSchema = z
     maxIterations: z.number().int().positive().default(100),
     maxToolResultChars: z.number().int().positive().default(64_000),
     contextWindowTokens: z.number().int().positive().optional(),
+    outputReserveTokens: z.number().int().nonnegative().default(4_096),
     params: z.record(z.string(), z.unknown()).default({})
   })
   .strict();
@@ -80,7 +81,7 @@ function configSchema(configDir: string) {
         (providers) => Object.keys(providers).length > 0,
         "At least one provider must be configured"
       ),
-      sessions: sessionsSchema.prefault({ dir: `${configDir}/workspace/sessions` }),
+      sessions: sessionsSchema.prefault({ dir: `${configDir}/sessions` }),
       tools: toolsSchema.prefault({})
     })
     .strict();

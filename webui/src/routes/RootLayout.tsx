@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import AppShell from "../components/AppShell";
@@ -20,7 +20,7 @@ export default function RootLayout() {
   const sessions = useSessions("default");
   const projects = useProjects();
   const config = useConfig();
-  const files = useFiles();
+  const files = useFiles(activeKey, sessions.activeSession?.revision);
   const {
     leftCollapsed,
     rightCollapsed,
@@ -48,14 +48,27 @@ export default function RootLayout() {
   useEffect(() => {
     if (sessionId && sessionId !== prevKeyRef.current) {
       prevKeyRef.current = sessionId;
-      void sessions.loadSession(sessionId);
+      void (async () => {
+        const loaded = await sessions.loadSession(sessionId);
+        if (!loaded && sessionId === "default") {
+          try {
+            await sessions.createSession({ key: sessionId, workspace: null });
+            await sessions.loadSession(sessionId);
+          } catch {
+            // useSessions exposes the actionable API error in the chat surface.
+          }
+        }
+      })();
     }
-  }, [sessionId, sessions.loadSession]);
+  }, [sessionId, sessions.loadSession, sessions.createSession]);
 
   // Use route path rather than Boolean(sessionId) so new non-chat routes
   // don't accidentally inherit chat layout.
   const isChatPage = location.pathname.startsWith("/chat");
-  const socket = useAgentSocket(activeKey, { onDone: refreshActiveSession, enabled: isChatPage });
+  const socket = useAgentSocket(activeKey, {
+    onDone: refreshActiveSession,
+    enabled: isChatPage && sessions.activeSession?.key === activeKey
+  });
 
   // Sync activeKey → URL (handles "default" session, new sessions, and
   // session changes from sidebar)
@@ -68,41 +81,24 @@ export default function RootLayout() {
 
   // Create a new session immediately and navigate to it
   const handleNewSession = useCallback(() => {
-    const sessionKey = crypto.randomUUID();
-    handleSessionSelect(sessionKey);
-  }, [handleSessionSelect]);
+    void sessions.createSession({ workspace: null })
+      .then((session) => handleSessionSelect(session.key))
+      .catch(() => undefined);
+  }, [handleSessionSelect, sessions.createSession]);
 
   // Create a new session in a specific project (workspace)
   const handleNewInProject = useCallback(
-    async (workspace: string) => {
-      const sessionKey = crypto.randomUUID();
-      // Pre-set workspace via PATCH before navigating
-      try {
-        // Trigger session creation via GET, then set workspace
-        await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}`);
-        await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ workspace }),
-        });
-      } catch {
-        // Ignore — session will be created on first load anyway
-      }
-      handleSessionSelect(sessionKey);
+    (workspace: string) => {
+      void sessions.createSession({ workspace })
+        .then((session) => handleSessionSelect(session.key))
+        .catch(() => undefined);
     },
-    [handleSessionSelect]
+    [handleSessionSelect, sessions.createSession]
   );
 
-  // Derive configDir from sessions.dir: <configDir>/workspace/sessions → configDir
-  const defaultWorkspace = useMemo(() => {
-    const dir = config.config?.sessions?.dir;
-    if (dir && dir.endsWith("/workspace/sessions")) {
-      return dir.slice(0, -"/workspace/sessions".length);
-    }
-    return dir ?? "";
-  }, [config.config?.sessions?.dir]);
+  const defaultWorkspace = sessions.activeSession?.effectiveWorkspace ?? "";
 
-  const grouped = projects.getGrouped(sessions.sessions, defaultWorkspace);
+  const grouped = projects.getGrouped(sessions.sessions);
 
   return (
     <>

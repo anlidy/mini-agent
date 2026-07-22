@@ -25,10 +25,10 @@ AgentRunner ──▶ Provider (LLM backend)
 ToolRegistry ◀── tool execution
     │
     ▼
-SkillsLoader ◀── workspace/skills/
+SkillsLoader ◀── $MINI_AGENT_HOME/skills/ + workspace/skills/
     │
     ▼
-SessionManager ──▶ .mini-agent/workspace/sessions/
+SessionManager ──▶ $MINI_AGENT_HOME/sessions/
 ```
 
 ## Modules
@@ -37,7 +37,7 @@ SessionManager ──▶ .mini-agent/workspace/sessions/
 
 The application entry point and the only thing that talks to a human. `runCli`:
 
-1. **Parse args** — `--workspace`, `--session`, `--resume`, `--stream`.
+1. **Parse args** — `--workspace`, `--session`, `--resume`, `--stream`, or explicit `import [--apply]`.
 2. **Load config** — `ensureDefaultConfig`; a `ConfigValidationError` is caught and printed as a clean `Config error:` message (no stack trace) before exiting.
 3. **Wire one agent** — builds the `OpenAIProvider`, a config-driven `ToolRegistry` (search backend, opt-in exec), and a single `AgentLoop`.
 4. **Run the loop** — reads lines from a readline interface (TTY or piped). Plain input is sent to the agent via `run()` or, with `--stream`, `stream()` (printing tokens live); a terminal `usage>` line reports token usage.
@@ -59,7 +59,7 @@ The `AgentProtocol` interface is the transport-agnostic contract for the agent r
 
 - `runTurn(input, options)` — start a turn, get back `AsyncIterable<AgentEvent>`
 - `abortTurn()` — cancel the in-flight turn
-- `listSessions()`, `getSession()`, `deleteSession()`, `updateSession()` — session CRUD
+- `createSession()`, `listSessions()`, `getSession()`, `deleteSession()`, `updateSession()` — revision-aware session CRUD
 - `getToolDefinitions()` — registered tools
 
 `DirectAgentClient` is the in-process transport: it wraps an `Agent`, a `SessionManager`, and a `ToolRegistry` behind `AgentProtocol`. There is no serialization — the client yields native `AgentEvent` objects, and session operations delegate directly to the manager. This is the transport used by the CLI, TUI, or any Node.js embedder that wants zero-overhead access to the runtime.
@@ -88,16 +88,17 @@ REST routes:
 | Method | Path | Handler |
 |---|---|---|
 | `GET` | `/api/sessions` | `SessionManager.listSessions()` |
-| `GET` | `/api/sessions/:key` | `SessionManager.getOrCreate()` |
-| `PATCH` | `/api/sessions/:key` | Update session title and/or workspace (404 if missing) |
+| `POST` | `/api/sessions` | Explicit Session creation |
+| `GET` | `/api/sessions/:key` | Read only; 404 if missing |
+| `PATCH` | `/api/sessions/:key` | Revision-CAS update; nullable workspace |
 | `DELETE` | `/api/sessions/:key` | `SessionManager.deleteSession()` |
 | `GET` | `/api/config` | redacted in-memory config |
 | `PUT` | `/api/config` | `writeConfig()` + in-memory version bump |
 | `GET` | `/api/tools` | configured `ToolRegistry.getDefinitions()` |
-| `GET` | `/api/files/tree?path=` | read-only workspace-contained file tree |
-| `GET` | `/api/files/content?path=` | read-only workspace-contained file content |
+| `GET` | `/api/sessions/:key/files/tree?path=` | session-workspace file tree |
+| `GET` | `/api/sessions/:key/files/content?path=` | session-workspace file content |
 
-The WebSocket endpoint is `/ws?session=<key>`. The `session` query parameter is optional; when omitted, the server allocates a bare UUID key and announces it in the first `session` event. Each connection owns one session view, one `AgentLoop`, and one per-connection `ToolRegistry`. Incoming `user_message` starts a streamed turn; `abort` cancels the in-flight turn; `approve_command` resolves a pending exec approval request. A second `user_message` while a turn is active returns `turn_rejected`.
+The WebSocket endpoint is `/ws?session=<key>` and binds only an already-created Session. Each connection owns one `AgentLoop` and one per-connection `ToolRegistry`, while HTTP and all connections share the same `SessionManager`. Incoming `user_message` starts a streamed turn; `abort` cancels it; `approve_command` resolves an exec approval. Per-connection overlap returns `turn_rejected`; a second connection targeting the same Session receives `session_busy` from the per-session lease.
 
 Config is global per server instance. `PUT /api/config` writes `.mini-agent/config.json` atomically and bumps an in-memory version. Connections compare that version before the next turn and rebuild their `AgentLoop` when needed; active turns are not interrupted.
 
@@ -110,11 +111,11 @@ Security invariants:
 
 The top-level coordinator. Creates and wires all dependencies, then executes the turn lifecycle:
 
-1. **Restore** — load or create session via SessionManager
+1. **Lease/restore** — acquire the per-session lease, then read a revisioned snapshot
 2. **Build** — construct messages via ContextBuilder (system prompt + history + user input)
 3. **Run** — execute the tool-calling loop via AgentRunner
-4. **Save** — persist user, assistant, and tool messages to session
-5. **Respond** — return final content and metadata
+4. **Commit** — CAS-save only completed/max-iteration results
+5. **Respond** — emit `done` only after commit; otherwise emit/throw the typed error
 
 AgentLoop is the sole wiring/coordination layer — it constructs and connects every subsystem. Other modules depend only on the narrow interfaces they are handed.
 
@@ -123,7 +124,7 @@ AgentLoop is the sole wiring/coordination layer — it constructs and connects e
 The core execution engine. Takes a spec (`AgentRunSpec`) and runs the LLM + tool-calling iteration loop. A single internal `execute(spec, streaming)` generator backs two public entry points:
 
 - `run(spec)` — consumes the loop with streaming disabled (always `provider.chat`), so its behavior and the provider contract are unchanged. Returns `AgentRunResult`.
-- `runStream(spec)` — prefers `provider.chatStream` and yields `AgentEvent`s (`token`, `tool_call`, `tool_result`, `error`, and a single terminal `done` carrying the full result).
+- `runStream(spec)` — prefers `provider.chatStream` and yields internal runner events. `AgentLoop` buffers its terminal result and only exposes `done` after the Session commit succeeds.
 
 ```
 for iteration up to maxIterations:
@@ -143,13 +144,13 @@ Built-in resilience:
 - **Truncated tool call recovery** — if the response is cut mid-tool-call, request reissue once
 - **Orphan tool result cleanup** — remove tool messages whose parent assistant message was dropped
 - **Missing tool result backfill** — insert synthetic results for tool calls that lost their output
-- **Tool result compaction** — replace old large tool results with a one-line summary
-- **Context budget trimming** — drop oldest messages using a pluggable `TokenCounter` (`src/agent/tokens.ts`) when the estimated token count exceeds the limit
+- **Tool result compaction** — summarize old results only when their Tool metadata allows it
+- **Context budget trimming** — budget system, tool definitions, current turn, and output reserve first, then drop whole old user turns; required-content overflow throws `ContextBudgetError` before Provider I/O
 - **Cooperative abort** — an `AbortSignal` on the spec exits the loop cleanly with `stopReason: "aborted"`
 
 ### Events & streaming (`src/agent/events.ts`)
 
-`AgentEvent` is the discriminated union surfaced by `runStream` / `AgentLoop.stream`: `token`, `tool_call`, `tool_result`, `done`, `error`. Providers expose streaming through an optional `chatStream(): AsyncIterable<ProviderStreamEvent>`; the runner falls back to `chat()` when it is absent, so streaming is purely additive.
+`AgentEvent` is the discriminated union surfaced by `runStream` / `AgentLoop.stream`: `token`, `tool_call`, `tool_result`, `done`, `error`. Providers expose streaming through an optional `chatStream(): AsyncIterable<ProviderStreamEvent>`; the runner falls back to `chat()` when it is absent. `AgentLoop.stream` is the public commit boundary: it suppresses the runner terminal event, commits the Session, then emits exactly one terminal `done`; aborts and failures emit one terminal `error` instead.
 
 ### Provider (`src/providers/`)
 
@@ -199,21 +200,19 @@ Workspace safety: `resolveWorkspacePath()` prevents path traversal with `..` che
 
 ### Session (`src/session/`)
 
-JSONL-based persistence with atomic writes:
+JSONL-based transactional persistence:
 
-- Sessions stored as `<configDir>/workspace/sessions/{key}.jsonl`
-- First JSONL line is a metadata header: canonical `key`, `created_at`, `updated_at`, and freeform `metadata`
-- `metadata.workspace` stores the per-conversation working directory (default = configDir). When set, it overrides the default for tool execution. The Web UI derives sidebar projects from this field.
+- Sessions stored once as `$MINI_AGENT_HOME/sessions/{sha256(key)}.jsonl`
+- v1 header contains canonical `key`, `version`, `revision`, `message_count`, timestamps, and metadata; v0 is upgraded on its next successful save
+- `metadata.workspace` is a canonical existing directory; absence means a per-session directory under Runtime Home `scratch/`
 - `metadata.title` is auto-derived from the first user message; can be updated via `PATCH /api/sessions/:key`
-- Remaining JSONL lines are message records; invalid message lines are skipped on load
-- Filenames are sanitized, but `SessionManager` treats the header key as canonical
-- Atomic write via temp file + rename
+- Invalid JSONL records fail with filename and original line number
+- Saves acquire a short `.lock`, re-read disk revision, enforce CAS, write a PID+UUID temp file, and atomically rename
 - New sessions default `metadata.source` from the driver (`cli` or `webui`)
-- History trimming by message count and character budget
-- Drops leading tool messages so trimmed history never starts with an orphan tool result
-- Session listing returns `{ key, createdAt, updatedAt, messageCount, title, workspace? }[]`
-- `SessionManager.get(key)` returns `Session | undefined` without auto-creating; `getOrCreate(key)` still creates on miss
-- Session deletion removes the JSONL file and clears the in-memory cache entry
+- History selection uses a soft message limit over complete user turns; `maxHistoryChars` is compatibility-only
+- v1 listing reads only the header; v0 listing fully scans for compatibility
+- snapshots are deep-cloned and saves return the next revision; no mutable Session cache is shared
+- active leases reject turns, PATCH, and delete. Cross-process contenders compute concurrently but only one revision can commit
 
 ### ContextBuilder (`src/agent/ContextBuilder.ts`)
 
@@ -233,23 +232,24 @@ Adjacent same-role messages are merged to prevent invalid role sequences.
 
 ### Skills (`src/skills/SkillsLoader.ts`)
 
-Discovers skills from `workspace/skills/{name}/SKILL.md`:
+Builds one catalog from `$MINI_AGENT_HOME/skills/{id}/SKILL.md` and `workspace/skills/{id}/SKILL.md`:
 
-- Parses YAML frontmatter for name, description, and `always` flag
+- Requires frontmatter `name` to equal the directory id and a non-empty description
+- Project ids override global ids; invalid files and realpath escapes fail before Provider I/O
 - Generates a summary injected into the system prompt
-- Can load full skill content on demand via `read_file`
+- Loads full content only through the catalog-backed `read_skill` tool; `always` is informational in phase one
 
 ### Config (`src/config/`)
 
-Loads, merges, and validates configuration. All functions take `configDir` (the `.mini-agent` directory itself, default `<cwd>/.mini-agent`):
+Loads, merges, and validates global configuration. All functions take Runtime Home (default `MINI_AGENT_HOME` or `~/.mini-agent`):
 
-- `defaultConfig(configDir)` — hardcoded defaults; sessions.dir = `<configDir>/workspace/sessions`
+- `defaultConfig(runtimeHome)` — hardcoded defaults; sessions.dir = `<runtimeHome>/sessions`
 - `loadConfig(configDir)` — reads `<configDir>/config.json`, deep-merges over defaults, validates against zod schema
 - `ensureDefaultConfig(configDir)` — auto-creates the config file on first run
 - `writeConfig(patch, configDir)` — writes validated provider/agent/search/exec config patches atomically, preserves stored API keys when a UI round-trip sends `***`
 - `configFilePath(configDir)` — returns `<configDir>/config.json`
 
-The `configDir` is resolved to an absolute path at startup. The `--workspace` CLI/server option names the project root; configDir is `<projectRoot>/.mini-agent`.
+`RuntimePaths` is the only path authority for config, sessions, global skills, scratch, and canonical project workspaces. `--workspace` never selects credentials or Session storage. Legacy project-local data is read only by the explicit, dry-run-first import command; `.mini-agent/project.json` overrides remain deferred.
 
 ### Hooks (`src/agent/hooks.ts`)
 
@@ -276,7 +276,7 @@ ContextBuilder.buildMessages()
 AgentRunner.run() / runStream()
     │  iterative LLM calls + tool execution (AbortSignal-aware)
     ▼
-Final Response (+ usage) + Session Save
+Session CAS commit → terminal `done` (+ usage)
 ```
 
 For `--stream` and WebSocket turns, AgentRunner yields `AgentEvent`s (token/tool_call/tool_result/done) that the driver forwards to its client; the terminal `done` carries the same result `run()` would return.

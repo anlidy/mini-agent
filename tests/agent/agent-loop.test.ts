@@ -10,6 +10,9 @@ import { OpenAIProvider } from "../../src/providers/OpenAIProvider.js";
 import { ToolRegistry } from "../../src/tools/ToolRegistry.js";
 import type { ChatRequest, LLMProvider, LLMResponse, ProviderStreamEvent } from "../../src/providers/Provider.js";
 import type { AgentEvent } from "../../src/agent/events.js";
+import { safeSessionFilename } from "../../src/session/SessionManager.js";
+import { SessionManager } from "../../src/session/SessionManager.js";
+import type { Session } from "../../src/session/Session.js";
 
 class ScriptedProvider implements LLMProvider {
   readonly requests: ChatRequest[] = [];
@@ -48,6 +51,7 @@ describe("AgentLoop", () => {
 
   it("runs provider, executes tools, saves JSONL session, and resumes history", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-"));
+    const runtimeHome = path.join(workspace, "runtime");
     await readFile(path.join(workspace, "README.md")).catch(async () => {
       await import("node:fs/promises").then((fs) => fs.writeFile(path.join(workspace, "README.md"), "project readme"));
     });
@@ -60,13 +64,13 @@ describe("AgentLoop", () => {
       response({ content: "README says project readme" }),
       response({ content: "I remember the README." })
     ]);
-    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, sessionKey: "demo" });
+    const agent = new AgentLoop({ workspace, runtimeHome, provider, sessionKey: "demo" });
 
     const first = await agent.run("read README.md");
     expect(first.content).toBe("README says project readme");
     expect(first.toolsUsed).toEqual(["read_file"]);
 
-    const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "demo.jsonl");
+    const sessionPath = path.join(runtimeHome, "sessions", `${safeSessionFilename("demo")}.jsonl`);
     expect(await readFile(sessionPath, "utf8")).toContain("README says project readme");
 
     const second = await agent.run("what did you read?");
@@ -77,11 +81,12 @@ describe("AgentLoop", () => {
 
   it("uses provider settings from config.jsonconfig.json when no provider is injected", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-config-"));
-    const config = defaultConfig(path.join(workspace, ".mini-agent"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const config = defaultConfig(runtimeHome);
     config.providers.deepseek!.apiKey = "config-file-key";
-    config.sessions.dir = path.join(workspace, ".mini-agent", "custom-sessions");
-    await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-    await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config)}\n`, "utf8");
+    config.sessions.dir = path.join(runtimeHome, "ignored-custom-sessions");
+    await mkdir(runtimeHome, { recursive: true });
+    await writeFile(path.join(runtimeHome, "config.json"), `${JSON.stringify(config)}\n`, "utf8");
     const requests: ChatRequest[] = [];
     const apiKeys: string[] = [];
     vi.spyOn(OpenAIProvider.prototype, "chat").mockImplementation(async function(this: OpenAIProvider, request) {
@@ -90,21 +95,22 @@ describe("AgentLoop", () => {
       return response({ content: "configured" });
     });
 
-    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
+    const agent = new AgentLoop({ workspace, runtimeHome });
     const result = await agent.run("hello");
 
     expect(result.content).toBe("configured");
     expect(apiKeys).toEqual(["config-file-key"]);
     expect(requests[0]?.model).toBe("deepseek-chat");
-    await expect(readFile(path.join(config.sessions.dir, "default.jsonl"), "utf8")).resolves.toContain("configured");
+    await expect(readFile(path.join(runtimeHome, "sessions", `${safeSessionFilename("default")}.jsonl`), "utf8")).resolves.toContain("configured");
   });
 
   it("fails fast with an actionable error when no API key is configured and no provider is injected", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-nokey-"));
+    const runtimeHome = path.join(workspace, "runtime");
     const previous = process.env.MINI_AGENT_API_KEY;
     delete process.env.MINI_AGENT_API_KEY;
     try {
-      const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
+      const agent = new AgentLoop({ workspace, runtimeHome });
       await expect(agent.run("hello")).rejects.toThrow(/Missing provider API key/);
     } finally {
       if (previous !== undefined) {
@@ -115,6 +121,7 @@ describe("AgentLoop", () => {
 
   it("reads the API key from the MINI_AGENT_API_KEY env var when config omits it", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-envkey-"));
+    const runtimeHome = path.join(workspace, "runtime");
     const previous = process.env.MINI_AGENT_API_KEY;
     process.env.MINI_AGENT_API_KEY = "env-key";
     const apiKeys: string[] = [];
@@ -123,7 +130,7 @@ describe("AgentLoop", () => {
       return response({ content: "ok" });
     });
     try {
-      const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent") });
+      const agent = new AgentLoop({ workspace, runtimeHome });
       const result = await agent.run("hello");
       expect(result.content).toBe("ok");
       expect(apiKeys).toEqual(["env-key"]);
@@ -138,6 +145,7 @@ describe("AgentLoop", () => {
 
   it("streams token and done events and persists the session", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-stream-"));
+    const runtimeHome = path.join(workspace, "runtime");
     const provider: LLMProvider = {
       defaultModel: () => "stream-model",
       async chat(): Promise<LLMResponse> {
@@ -149,7 +157,7 @@ describe("AgentLoop", () => {
         yield { type: "done", response: { content: "Hello", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} } };
       }
     };
-    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, sessionKey: "stream" });
+    const agent = new AgentLoop({ workspace, runtimeHome, provider, sessionKey: "stream" });
 
     const events: AgentEvent[] = [];
     for await (const event of agent.stream("hi")) {
@@ -160,7 +168,7 @@ describe("AgentLoop", () => {
       .toEqual(["Hel", "lo"]);
     expect(events.at(-1)?.type).toBe("done");
 
-    const sessionPath = path.join(workspace, ".mini-agent", "workspace", "sessions", "stream.jsonl");
+    const sessionPath = path.join(runtimeHome, "sessions", `${safeSessionFilename("stream")}.jsonl`);
     await expect(readFile(sessionPath, "utf8")).resolves.toContain("Hello");
   });
 
@@ -171,10 +179,11 @@ describe("AgentLoop", () => {
     // edits to config.json. When no constructor value is given, prepare() must
     // pick up the on-disk value on every run.
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-iter-"));
-    await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-    const configPath = path.join(workspace, ".mini-agent", "config.json");
+    const runtimeHome = path.join(workspace, "runtime");
+    await mkdir(runtimeHome, { recursive: true });
+    const configPath = path.join(runtimeHome, "config.json");
     const writeMaxIterations = async (maxIterations: number): Promise<void> => {
-      const config = defaultConfig(path.join(workspace, ".mini-agent"));
+      const config = defaultConfig(runtimeHome);
       config.providers.deepseek!.apiKey = "k";
       config.agents.default!.maxIterations = maxIterations;
       await writeFile(configPath, `${JSON.stringify(config)}\n`, "utf8");
@@ -196,7 +205,7 @@ describe("AgentLoop", () => {
     };
 
     // No maxIterations in the constructor -> prepare() must read it from config.
-    const agent = new AgentLoop({ workspace: path.join(workspace, ".mini-agent"), provider, tools: new ToolRegistry(), sessionKey: "iter" });
+    const agent = new AgentLoop({ workspace, runtimeHome, provider, tools: new ToolRegistry(), sessionKey: "iter" });
 
     await writeMaxIterations(2);
     const first = await agent.run("go");
@@ -209,5 +218,68 @@ describe("AgentLoop", () => {
     const second = await agent.run("go again");
     expect(second.content).toBe("Maximum tool iterations reached.");
     expect(calls).toBe(4);
+  });
+
+  it("does not persist provider errors or aborted turns", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-failure-"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions") });
+    const failing: LLMProvider = {
+      defaultModel: () => "fail",
+      async chat() { throw new Error("provider down"); }
+    };
+    const failed = new AgentLoop({ workspace, runtimeHome, sessions, provider: failing, sessionKey: "failed" });
+    await expect(failed.run("do not save")).rejects.toThrow("provider down");
+    expect(await sessions.get("failed")).toBeUndefined();
+
+    const controller = new AbortController();
+    controller.abort();
+    const aborted = new AgentLoop({ workspace, runtimeHome, sessions, provider: new ScriptedProvider([response({ content: "unused" })]), sessionKey: "aborted" });
+    await expect(aborted.run("do not save", { signal: controller.signal })).rejects.toThrow("Run aborted");
+    expect(await sessions.get("aborted")).toBeUndefined();
+  });
+
+  it("emits one terminal error and no done when saving fails", async () => {
+    class FailingSaveManager extends SessionManager {
+      override async save(_snapshot: Session): Promise<Session> {
+        throw new Error("disk full");
+      }
+    }
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-save-error-"));
+    const sessions = new FailingSaveManager({ sessionsDir: path.join(workspace, "runtime", "sessions") });
+    const agent = new AgentLoop({ workspace, runtimeHome: path.join(workspace, "runtime"), sessions, provider: new ScriptedProvider([response({ content: "answer" })]) });
+    const events: AgentEvent[] = [];
+    for await (const event of agent.stream("hello")) events.push(event);
+    expect(events.filter((event) => event.type === "error")).toHaveLength(1);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "error", error: "disk full" });
+  });
+
+  it("rejects overlapping turns for one session while allowing the first to commit", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-busy-"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions") });
+    let release!: () => void;
+    let started!: () => void;
+    const startedPromise = new Promise<void>((resolve) => { started = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const slow: LLMProvider = {
+      defaultModel: () => "slow",
+      async chat() {
+        started();
+        await wait;
+        return response({ content: "first" });
+      }
+    };
+    const first = new AgentLoop({ workspace, runtimeHome, sessions, provider: slow, sessionKey: "shared" });
+    const second = new AgentLoop({ workspace, runtimeHome, sessions, provider: new ScriptedProvider([response({ content: "second" })]), sessionKey: "shared" });
+    const firstRun = first.run("one");
+    await startedPromise;
+    const events: AgentEvent[] = [];
+    for await (const event of second.stream("two")) events.push(event);
+    expect(events).toEqual([expect.objectContaining({ type: "error", code: "session_busy" })]);
+    release();
+    await expect(firstRun).resolves.toMatchObject({ content: "first" });
+    expect((await sessions.get("shared"))?.messages.map((message) => message.content)).toEqual(["one", "first"]);
   });
 });

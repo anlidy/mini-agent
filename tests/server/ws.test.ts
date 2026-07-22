@@ -10,6 +10,7 @@ import type { ChatRequest, LLMProvider, LLMResponse, ProviderStreamEvent } from 
 import type { ServerMessage } from "../../src/server/protocol.js";
 import type { ConfigState } from "../../src/server/routes/config.js";
 import { bindAgentConnection, type AgentSocket } from "../../src/server/wsHandler.js";
+import { SessionManager } from "../../src/session/SessionManager.js";
 
 class StreamingProvider implements LLMProvider {
   readonly requests: ChatRequest[] = [];
@@ -81,15 +82,18 @@ class FakeSocket implements AgentSocket {
 }
 
 async function setup(workspace: string, provider: LLMProvider): Promise<FakeSocket> {
-  const config = defaultConfig(path.join(workspace, ".mini-agent"));
+  const runtimeHome = path.join(workspace, "runtime");
+  const config = defaultConfig(runtimeHome);
   config.providers.deepseek!.apiKey = "test-key";
   config.tools.exec = { enabled: true, timeoutMs: 1000, maxOutputChars: 2000 };
-  await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-  await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await mkdir(runtimeHome, { recursive: true });
+  await writeFile(path.join(runtimeHome, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions"), source: "test" });
+  await sessions.create("demo", { workspace });
   const state: ConfigState = {
     config,
     version: 0,
-    workspace,
+    runtimeHome,
     update(next: Config) {
       this.config = next;
       this.version += 1;
@@ -98,7 +102,9 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
   const socket = new FakeSocket();
   bindAgentConnection(socket, new URL("http://localhost/ws?session=demo"), {
     workspace,
+    runtimeHome,
     state,
+    sessions,
     providerFactory: () => provider,
     approvalTimeoutMs: 100
   });
@@ -106,16 +112,18 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
 }
 
 describe("server WebSocket API", () => {
-  it("creates bare UUID session keys for new websocket sessions", async () => {
+  it("rejects websocket connections without an existing session key", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-key-"));
-    const config = defaultConfig(path.join(workspace, ".mini-agent"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const config = defaultConfig(runtimeHome);
     config.providers.deepseek!.apiKey = "test-key";
-    await mkdir(path.join(workspace, ".mini-agent"), { recursive: true });
-    await writeFile(path.join(workspace, ".mini-agent", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    await mkdir(runtimeHome, { recursive: true });
+    await writeFile(path.join(runtimeHome, "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions") });
     const state: ConfigState = {
       config,
       version: 0,
-      workspace,
+      runtimeHome,
       update(next: Config) {
         this.config = next;
         this.version += 1;
@@ -124,15 +132,15 @@ describe("server WebSocket API", () => {
     const socket = new FakeSocket();
     bindAgentConnection(socket, new URL("http://localhost/ws"), {
       workspace,
+      runtimeHome,
       state,
+      sessions,
       providerFactory: () => new StreamingProvider(),
       approvalTimeoutMs: 100
     });
 
-    const session = await socket.next();
-    expect(session.type).toBe("session");
-    expect(session.type === "session" && session.key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(session.type === "session" && session.key.startsWith("session-")).toBe(false);
+    const message = await socket.next();
+    expect(message).toMatchObject({ type: "error", code: "session_not_found" });
   });
 
   it("binds a session and forwards streamed agent events", async () => {

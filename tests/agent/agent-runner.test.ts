@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AgentHook, type AgentHookContext } from "../../src/agent/hooks.js";
-import { AgentRunner } from "../../src/agent/AgentRunner.js";
+import { AgentRunner, ContextBudgetError } from "../../src/agent/AgentRunner.js";
 import type { ChatRequest, LLMProvider, LLMResponse } from "../../src/providers/Provider.js";
 import { ToolRegistry } from "../../src/tools/ToolRegistry.js";
 
@@ -39,6 +39,7 @@ function makeRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register({
     name: "add",
+    compactable: true,
     description: "Adds two numbers.",
     parameters: {
       type: "object",
@@ -315,12 +316,12 @@ describe("AgentRunner", () => {
         role: "assistant",
         content: "",
         tool_calls: [
-          { id: "old", type: "function", function: { name: "read_file", arguments: "{}" } },
-          { id: "recent", type: "function", function: { name: "read_file", arguments: "{}" } }
+          { id: "old", type: "function", function: { name: "add", arguments: "{}" } },
+          { id: "recent", type: "function", function: { name: "add", arguments: "{}" } }
         ]
       },
-      { role: "tool", tool_call_id: "old", name: "read_file", content: "x".repeat(600) },
-      { role: "tool", tool_call_id: "recent", name: "read_file", content: "y".repeat(600) }
+      { role: "tool", tool_call_id: "old", name: "add", content: "x".repeat(600) },
+      { role: "tool", tool_call_id: "recent", name: "add", content: "y".repeat(600) }
     ];
     const provider = new ScriptedProvider([response({ content: "ok" })]);
     const runner = new AgentRunner(provider);
@@ -338,8 +339,8 @@ describe("AgentRunner", () => {
     expect(provider.requests[0]?.messages[2]).toEqual({
       role: "tool",
       tool_call_id: "old",
-      name: "read_file",
-      content: `[read_file result summarized: ${"x".repeat(120)}...]`
+      name: "add",
+      content: `[add result summarized: ${"x".repeat(120)}...]`
     });
     expect(provider.requests[0]?.messages[3]).toEqual(initialMessages[3]);
   });
@@ -385,13 +386,46 @@ describe("AgentRunner", () => {
       maxIterations: 3,
       maxToolResultChars: 1000,
       workspace: "/tmp/workspace",
-      contextWindowTokens: 20
+      contextWindowTokens: 250
     });
 
     expect(provider.requests[0]?.messages).toEqual([
       { role: "system", content: "system prompt" },
       { role: "user", content: "recent" }
     ]);
+  });
+
+  it("drops an old tool-call turn as a complete group", async () => {
+    const provider = new ScriptedProvider([response({ content: "ok" })]);
+    const runner = new AgentRunner(provider);
+    await runner.run({
+      initialMessages: [
+        { role: "system", content: "system" },
+        { role: "user", content: "old" },
+        { role: "assistant", content: "", tool_calls: [{ id: "old-call", type: "function", function: { name: "add", arguments: "{}" } }] },
+        { role: "tool", tool_call_id: "old-call", name: "add", content: "x".repeat(2_000) },
+        { role: "assistant", content: "old answer" },
+        { role: "user", content: "current" }
+      ],
+      tools: makeRegistry(), model: "test-model", maxIterations: 2, maxToolResultChars: 1000,
+      contextWindowTokens: 500
+    });
+    expect(provider.requests[0]?.messages).toEqual([
+      { role: "system", content: "system" },
+      { role: "user", content: "current" }
+    ]);
+  });
+
+  it("throws before calling the provider when required context exceeds the window", async () => {
+    const provider = new ScriptedProvider([response({ content: "unused" })]);
+    const runner = new AgentRunner(provider);
+    await expect(runner.run({
+      initialMessages: [{ role: "system", content: "required" }, { role: "user", content: "current" }],
+      tools: makeRegistry(), model: "test-model", maxIterations: 2, maxToolResultChars: 1000,
+      contextWindowTokens: 1,
+      outputReserveTokens: 1
+    })).rejects.toBeInstanceOf(ContextBudgetError);
+    expect(provider.requests).toHaveLength(0);
   });
 
   it("does not execute or finalize tool calls when the model response was truncated", async () => {

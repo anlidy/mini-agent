@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Tool } from "./Tool.js";
-import { resolveWorkspacePath, toWorkspaceRelative } from "./path.js";
+import { resolveWorkspaceRealPath, toWorkspaceRelative } from "./path.js";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 64_000;
 
@@ -10,6 +10,7 @@ export function createFilesystemTools(): Tool[] {
   return [
     {
       name: "read_file",
+      compactable: true,
       description: "Read a UTF-8 text file from the workspace.",
       readOnly: true,
       parameters: {
@@ -21,7 +22,7 @@ export function createFilesystemTools(): Tool[] {
         required: ["path"]
       },
       async execute(args, context) {
-        const target = resolveWorkspacePath(context.workspace, String(args.path));
+        const target = await resolveWorkspaceRealPath(context.workspace, String(args.path));
         const text = await readFile(target, "utf8");
         return truncate(text, numberArg(args.maxChars, DEFAULT_MAX_OUTPUT_CHARS));
       }
@@ -38,7 +39,7 @@ export function createFilesystemTools(): Tool[] {
         required: ["path", "content"]
       },
       async execute(args, context) {
-        const target = resolveWorkspacePath(context.workspace, String(args.path));
+        const target = await resolveWorkspaceRealPath(context.workspace, String(args.path), true);
         await mkdir(path.dirname(target), { recursive: true });
         await writeFile(target, String(args.content), "utf8");
         return `Wrote ${toWorkspaceRelative(context.workspace, target)}`;
@@ -46,6 +47,7 @@ export function createFilesystemTools(): Tool[] {
     },
     {
       name: "list_dir",
+      compactable: true,
       description: "List files and directories inside a workspace directory.",
       readOnly: true,
       parameters: {
@@ -56,7 +58,7 @@ export function createFilesystemTools(): Tool[] {
         }
       },
       async execute(args, context) {
-        const target = resolveWorkspacePath(context.workspace, typeof args.path === "string" ? args.path : ".");
+        const target = await resolveWorkspaceRealPath(context.workspace, typeof args.path === "string" ? args.path : ".");
         const entries = await readdir(target, { withFileTypes: true });
         const maxEntries = numberArg(args.maxEntries, 200);
         const lines = await Promise.all(entries

@@ -13,6 +13,7 @@ import type { ConfigState } from "./routes/config.js";
 
 export interface WebSocketHandlerOptions {
   workspace: string;
+  runtimeHome?: string;
   state: ConfigState;
   sessions?: SessionManager;
   providerFactory?: (config: Config) => LLMProvider;
@@ -68,13 +69,19 @@ export function handleWebSocketUpgrade(
 }
 
 export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocketHandlerOptions): void {
-  const sessionKey = url.searchParams.get("session") || randomUUID();
+  const sessionKey = url.searchParams.get("session");
   const approvals = new Map<string, PendingApproval>();
   let activeTurn: AbortController | undefined;
   let agentVersion = -1;
-  let agent = buildAgent(options, sessionKey, approveCommand);
-
-  ws.send({ type: "session", key: sessionKey });
+  let agent: AgentLoop | undefined;
+  const ready = initialize().catch((error) => {
+    ws.send({
+      type: "error",
+      error: error instanceof Error ? error.message : String(error),
+      code: errorCode(error)
+    });
+    return false;
+  });
 
   ws.onMessage((raw) => {
     let message;
@@ -102,7 +109,8 @@ export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocke
       ws.send({ type: "turn_rejected", reason: "A turn is already active on this connection." });
       return;
     }
-    void runTurn(message.text);
+    activeTurn = new AbortController();
+    void runTurn(message.text, activeTurn);
   });
 
   ws.onClose(() => {
@@ -114,21 +122,35 @@ export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocke
     }
   });
 
-  async function runTurn(text: string): Promise<void> {
-    activeTurn = new AbortController();
+  async function runTurn(text: string, turn: AbortController): Promise<void> {
     try {
-      if (agentVersion !== options.state.version) {
+      if (!await ready || !sessionKey) return;
+      if (!agent || agentVersion !== options.state.version) {
         agent = buildAgent(options, sessionKey, approveCommand);
         agentVersion = options.state.version;
       }
-      for await (const event of agent.stream(text, { sessionKey, signal: activeTurn.signal })) {
+      for await (const event of agent.stream(text, { sessionKey, signal: turn.signal })) {
         ws.send(event);
       }
     } catch (error) {
       ws.send({ type: "error", error: error instanceof Error ? error.message : String(error) });
     } finally {
-      activeTurn = undefined;
+      if (activeTurn === turn) activeTurn = undefined;
     }
+  }
+
+  async function initialize(): Promise<boolean> {
+    if (!sessionKey) {
+      ws.send({ type: "error", error: "WebSocket requires an existing session key.", code: "session_not_found" });
+      return false;
+    }
+    const existing = await options.sessions?.get(sessionKey);
+    if (!existing) {
+      ws.send({ type: "error", error: `Session "${sessionKey}" not found.`, code: "session_not_found" });
+      return false;
+    }
+    ws.send({ type: "session", key: sessionKey });
+    return true;
   }
 
   function approveCommand(command: string): Promise<boolean> {
@@ -152,6 +174,7 @@ function buildAgent(
   const config = options.state.config;
   return new AgentLoop({
     workspace: options.workspace,
+    runtimeHome: options.runtimeHome,
     config,
     sessionKey,
     sessions: options.sessions,
@@ -160,4 +183,11 @@ function buildAgent(
     provider: options.providerFactory?.(config),
     approveCommand
   });
+}
+
+function errorCode(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return error.code;
+  }
+  return "session_error";
 }
