@@ -282,4 +282,77 @@ describe("AgentLoop", () => {
     await expect(firstRun).resolves.toMatchObject({ content: "first" });
     expect((await sessions.get("shared"))?.messages.map((message) => message.content)).toEqual(["one", "first"]);
   });
+
+
+  it("saves finished tool steps when a turn is interrupted and tells the next turn", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-interrupt-"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions") });
+    const controller = new AbortController();
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "edit",
+      description: "Edits a file, then the user hits stop.",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        controller.abort();
+        return "edited a.ts";
+      }
+    });
+    const provider = new ScriptedProvider([
+      response({ content: "Editing.", toolCalls: [{ id: "call_1", name: "edit", arguments: {} }], finishReason: "tool_calls" })
+    ]);
+    const agent = new AgentLoop({ workspace, runtimeHome, sessions, provider, tools, sessionKey: "interrupted" });
+
+    const events: AgentEvent[] = [];
+    for await (const event of agent.stream("fix a.ts", { signal: controller.signal })) events.push(event);
+
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "turn_aborted" });
+    const saved = await sessions.get("interrupted");
+    expect(saved?.messages.map((message) => [message.role, message.content, message.interrupted])).toEqual([
+      ["user", "fix a.ts", undefined],
+      ["assistant", "Editing.", undefined],
+      ["tool", "edited a.ts", undefined],
+      ["assistant", "", "user"]
+    ]);
+    const history = sessions.getHistory(saved!, { maxMessages: 50 });
+    expect(String(history.at(-1)?.content)).toContain("interrupted");
+  });
+
+  it("saves finished tool steps when the provider fails mid-turn", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-loop-midfail-"));
+    const runtimeHome = path.join(workspace, "runtime");
+    const sessions = new SessionManager({ sessionsDir: path.join(runtimeHome, "sessions") });
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "edit",
+      description: "Edits a file.",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return "edited a.ts";
+      }
+    });
+    let calls = 0;
+    const provider: LLMProvider = {
+      defaultModel: () => "flaky",
+      async chat() {
+        calls += 1;
+        if (calls === 1) {
+          return response({ toolCalls: [{ id: "call_1", name: "edit", arguments: {} }], finishReason: "tool_calls" });
+        }
+        throw new Error("provider down");
+      }
+    };
+    const agent = new AgentLoop({ workspace, runtimeHome, sessions, provider, tools, sessionKey: "midfail" });
+
+    await expect(agent.run("fix a.ts")).rejects.toThrow("provider down");
+    const saved = await sessions.get("midfail");
+    expect(saved?.messages.at(-2)).toMatchObject({ role: "tool", content: "edited a.ts" });
+    expect(saved?.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: expect.stringContaining("provider down"),
+      interrupted: "error"
+    });
+  });
 });

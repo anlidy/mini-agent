@@ -81,7 +81,7 @@ class FakeSocket implements AgentSocket {
   }
 }
 
-async function setup(workspace: string, provider: LLMProvider): Promise<FakeSocket> {
+async function setup(workspace: string, provider: LLMProvider, approvalTimeoutMs = 100): Promise<FakeSocket> {
   const runtimeHome = path.join(workspace, "runtime");
   const config = defaultConfig(runtimeHome);
   config.providers.deepseek!.apiKey = "test-key";
@@ -106,7 +106,7 @@ async function setup(workspace: string, provider: LLMProvider): Promise<FakeSock
     state,
     sessions,
     providerFactory: () => provider,
-    approvalTimeoutMs: 100
+    approvalTimeoutMs
   });
   return socket;
 }
@@ -209,5 +209,39 @@ describe("server WebSocket API", () => {
     const result = await socket.next();
     expect(result.type).toBe("tool_result");
     expect(result.type === "tool_result" && result.content).toContain("approved");
+  });
+
+  it("stops waiting for an approval as soon as the user aborts", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "mini-agent-ws-abort-approval-"));
+    const provider: LLMProvider = {
+      defaultModel: () => "approval-model",
+      async chat(): Promise<LLMResponse> {
+        return { content: "unused", reasoningContent: null, toolCalls: [], finishReason: "stop", usage: {} };
+      },
+      async *chatStream(): AsyncIterable<ProviderStreamEvent> {
+        yield {
+          type: "done",
+          response: {
+            content: null,
+            reasoningContent: null,
+            finishReason: "tool_calls",
+            toolCalls: [{ id: "call_1", name: "exec", arguments: { command: "echo never" } }],
+            usage: {}
+          }
+        };
+      }
+    };
+    // Long approval timeout: the turn must end because of the abort, not the timer.
+    const socket = await setup(workspace, provider, 60_000);
+    await socket.next();
+
+    socket.clientSend({ type: "user_message", text: "run command" });
+    expect((await socket.next()).type).toBe("tool_call");
+    expect((await socket.next()).type).toBe("approve_request");
+    socket.clientSend({ type: "abort" });
+
+    const result = await socket.next();
+    expect(result.type === "tool_result" && result.content).toContain("cancelled");
+    expect(await socket.next()).toMatchObject({ type: "error", code: "turn_aborted" });
   });
 });

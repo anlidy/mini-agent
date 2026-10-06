@@ -423,8 +423,20 @@ function isV1Header(header: SessionHeader | LegacySessionHeader): header is Sess
   return "version" in header && header.version === 1;
 }
 
+const INTERRUPTION_NOTES = {
+  user: "[The user interrupted this turn. Tool calls above completed; nothing after them ran.]",
+  error: "[This turn stopped early because of an error. Tool calls above completed.]"
+} as const;
+
 function toModelMessage(message: MessageRecord): Record<string, unknown> {
   const modelMessage: Record<string, unknown> = { role: message.role, content: message.content };
+  if (message.interrupted) {
+    // Tell the model the turn did not finish, so it does not assume a
+    // complete answer or redo work that already happened.
+    const note = INTERRUPTION_NOTES[message.interrupted];
+    const text = typeof message.content === "string" ? message.content.trim() : "";
+    modelMessage.content = text ? `${text}\n\n${note}` : note;
+  }
   if (message.tool_call_id) modelMessage.tool_call_id = message.tool_call_id;
   if (message.name) modelMessage.name = message.name;
   if (message.tool_calls) modelMessage.tool_calls = message.tool_calls;

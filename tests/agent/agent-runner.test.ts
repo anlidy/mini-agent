@@ -538,4 +538,83 @@ describe("AgentRunner", () => {
     expect(result.stopReason).toBe("aborted");
     expect(result.error).toBeUndefined();
   });
+
+
+  it("cancels the rest of a tool batch once the turn is aborted", async () => {
+    const controller = new AbortController();
+    const registry = makeRegistry();
+    registry.register({
+      name: "edit",
+      description: "Edits a file and gets interrupted.",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        controller.abort();
+        return "edited";
+      }
+    });
+    const provider = new ScriptedProvider([
+      response({
+        toolCalls: [
+          { id: "call_1", name: "edit", arguments: {} },
+          { id: "call_2", name: "add", arguments: { a: 1, b: 2 } }
+        ],
+        finishReason: "tool_calls"
+      })
+    ]);
+    const runner = new AgentRunner(provider);
+
+    const result = await runner.run({
+      initialMessages: [{ role: "user", content: "edit then add" }],
+      tools: registry,
+      model: "test-model",
+      maxIterations: 3,
+      maxToolResultChars: 1000,
+      workspace: "/tmp/workspace",
+      signal: controller.signal
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(provider.requests).toHaveLength(1);
+    const toolMessages = result.messages.filter((message) => message.role === "tool");
+    expect(toolMessages).toMatchObject([
+      { tool_call_id: "call_1", content: "edited" },
+      { tool_call_id: "call_2", content: expect.stringContaining("cancelled") }
+    ]);
+  });
+
+  it("keeps text that already streamed when the stream is aborted", async () => {
+    const controller = new AbortController();
+    const provider: LLMProvider = {
+      defaultModel: () => "test-model",
+      async chat() {
+        throw new Error("unused");
+      },
+      async *chatStream() {
+        yield { type: "delta" as const, content: "Let me look " };
+        controller.abort();
+        throw new Error("aborted");
+      }
+    };
+    const runner = new AgentRunner(provider);
+    const events = [];
+    for await (const event of runner.runStream({
+      initialMessages: [{ role: "user", content: "hello" }],
+      tools: makeRegistry(),
+      model: "test-model",
+      maxIterations: 3,
+      maxToolResultChars: 1000,
+      workspace: "/tmp/workspace",
+      signal: controller.signal
+    })) {
+      events.push(event);
+    }
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type === "done" && done.result.stopReason).toBe("aborted");
+    expect(done?.type === "done" && done.result.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: "Let me look ",
+      interrupted: "user"
+    });
+  });
 });

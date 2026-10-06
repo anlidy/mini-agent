@@ -9,6 +9,8 @@ export interface ToolExecutionContext {
    * gate beyond the tool's own safety checks.
    */
   approveCommand?(command: string): Promise<boolean> | boolean;
+  /** Fires when the user interrupts the turn; long-running tools should stop. */
+  signal?: AbortSignal;
 }
 
 export interface Tool {

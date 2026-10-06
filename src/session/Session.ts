@@ -6,6 +6,11 @@ export interface MessageRecord {
   tool_call_id?: string;
   name?: string;
   tool_calls?: unknown;
+  /**
+   * Set on the last assistant message of a turn that ended early. The turn's
+   * completed tool calls are kept because their side effects already happened.
+   */
+  interrupted?: "user" | "error";
   timestamp: string;
 }
 

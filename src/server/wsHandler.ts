@@ -103,6 +103,8 @@ export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocke
     }
     if (message.type === "abort") {
       activeTurn?.abort();
+      // A turn waiting on an approval would otherwise sit until the timeout.
+      denyPendingApprovals();
       return;
     }
     if (activeTurn) {
@@ -115,12 +117,16 @@ export function bindAgentConnection(ws: AgentSocket, url: URL, options: WebSocke
 
   ws.onClose(() => {
     activeTurn?.abort();
+    denyPendingApprovals();
+  });
+
+  function denyPendingApprovals(): void {
     for (const [id, pending] of approvals) {
       clearTimeout(pending.timer);
       approvals.delete(id);
       pending.resolve(false);
     }
-  });
+  }
 
   async function runTurn(text: string, turn: AbortController): Promise<void> {
     try {

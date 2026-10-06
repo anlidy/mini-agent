@@ -80,18 +80,23 @@ export class AgentRunner {
       };
       await hook.beforeIteration(hookContext);
       let response: LLMResponse;
+      const partial = { text: "" };
       try {
-        response = yield* this.streamResponse(spec, messages, streaming);
+        response = yield* this.streamResponse(spec, messages, streaming, partial);
       } catch (error) {
         if (error instanceof ContextBudgetError) {
           throw error;
         }
         if (spec.signal?.aborted) {
+          // Keep what the user already saw stream in.
+          if (partial.text.trim()) {
+            messages.push({ role: "assistant", content: partial.text, interrupted: "user" });
+          }
           yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents, reasoningContent) };
           return;
         }
         const finalContent = `Error calling LLM: ${error instanceof Error ? error.message : String(error)}`;
-        messages.push({ role: "assistant", content: finalContent });
+        messages.push({ role: "assistant", content: finalContent, interrupted: "error" });
         hookContext.finalContent = finalContent;
         hookContext.stopReason = "error";
         hookContext.error = finalContent;
@@ -125,7 +130,7 @@ export class AgentRunner {
           continue;
         }
         const finalContent = "Error: Model response was truncated while requesting tools.";
-        messages.push({ role: "assistant", content: finalContent });
+        messages.push({ role: "assistant", content: finalContent, interrupted: "error" });
         hookContext.finalContent = finalContent;
         hookContext.stopReason = "error";
         hookContext.error = finalContent;
@@ -141,13 +146,25 @@ export class AgentRunner {
       if (shouldExecuteTools(response)) {
         messages.push(buildAssistantToolCallMessage(response));
         await hook.beforeExecuteTools(hookContext);
-        for (const toolCall of response.toolCalls) {
+        for (const [index, toolCall] of response.toolCalls.entries()) {
+          if (spec.signal?.aborted) {
+            // Every requested call still needs a result for the history to
+            // stay valid; the ones that never ran are recorded as cancelled.
+            for (const skipped of response.toolCalls.slice(index)) {
+              messages.push({ role: "tool", tool_call_id: skipped.id, name: skipped.name, content: CANCELLED_TOOL_RESULT });
+              toolEvents.push({ name: skipped.name, status: "error", detail: CANCELLED_TOOL_RESULT });
+              yield { type: "tool_result", id: skipped.id, name: skipped.name, status: "error", content: CANCELLED_TOOL_RESULT };
+            }
+            await hook.afterIteration(hookContext);
+            yield { type: "done", result: abortedResult(messages, toolsUsed, usage, toolEvents, reasoningContent) };
+            return;
+          }
           yield { type: "tool_call", id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments };
           toolsUsed.push(toolCall.name);
           const result = await spec.tools.execute(
             toolCall.name,
             toolCall.arguments,
-            { workspace: spec.workspace ?? process.cwd(), approveCommand: spec.approveCommand }
+            { workspace: spec.workspace ?? process.cwd(), approveCommand: spec.approveCommand, signal: spec.signal }
           );
           const content = normalizeToolResult(result, spec.maxToolResultChars);
           hookContext.toolResults.push(content);
@@ -200,7 +217,12 @@ export class AgentRunner {
    * assembled response. Otherwise issues a single non-streaming `chat()` call
    * (no token events). The generator's return value is the final LLMResponse.
    */
-  private async *streamResponse(spec: AgentRunSpec, messages: AgentMessage[], streaming: boolean): AsyncGenerator<AgentEvent, LLMResponse> {
+  private async *streamResponse(
+    spec: AgentRunSpec,
+    messages: AgentMessage[],
+    streaming: boolean,
+    partial: { text: string }
+  ): AsyncGenerator<AgentEvent, LLMResponse> {
     const request = {
       messages: prepareMessagesForModel(messages, spec),
       tools: spec.tools.getDefinitions(),
@@ -214,6 +236,7 @@ export class AgentRunner {
       for await (const event of this.provider.chatStream(request)) {
         if (event.type === "delta") {
           if (event.content.length > 0) {
+            partial.text += event.content;
             yield { type: "token", text: event.content };
           }
         } else if (event.type === "reasoning") {
@@ -247,6 +270,7 @@ const DEFAULT_COMPACT_KEEP_RECENT = 10;
 const COMPACT_MIN_CHARS = 500;
 
 const ABORTED_MESSAGE = "Run aborted by caller.";
+const CANCELLED_TOOL_RESULT = "Error: cancelled - the user interrupted the turn before this tool ran.";
 
 function abortedResult(
   messages: AgentMessage[],

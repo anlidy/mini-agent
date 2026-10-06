@@ -60,6 +60,29 @@ describe("exec tool", () => {
     expect(result.toLowerCase()).toContain("timed out");
   });
 
+  it("kills a running command when the turn is interrupted", async () => {
+    const tool = createExecTool({ timeoutMs: 10_000 });
+    const ws = await workspace();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 50);
+    const startedAt = Date.now();
+    const result = String(await tool.execute({ command: "sleep 5" }, { workspace: ws, signal: controller.signal }));
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(result).toContain("user interrupted");
+  });
+
+  it("does not run a command when the turn was interrupted during approval", async () => {
+    const tool = createExecTool();
+    const ws = await workspace();
+    const controller = new AbortController();
+    const result = String(await tool.execute(
+      { command: "echo should-not-run" },
+      { workspace: ws, signal: controller.signal, approveCommand: () => { controller.abort(); return false; } }
+    ));
+    expect(result).toContain("cancelled");
+    expect(result).not.toContain("should-not-run");
+  });
+
   it("truncates large output", async () => {
     const tool = createExecTool({ maxOutputChars: 20 });
     const ws = await workspace();

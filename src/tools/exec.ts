@@ -50,9 +50,12 @@ export function createExecTool(options: ExecToolOptions = {}): Tool {
       }
       if (context.approveCommand) {
         const approved = await context.approveCommand(command);
-        if (!approved) {
+        if (!approved && !context.signal?.aborted) {
           return "Error: command not approved by the caller.";
         }
+      }
+      if (context.signal?.aborted) {
+        return "Error: cancelled - the user interrupted the turn before this command ran.";
       }
       const effectiveTimeout = clampTimeout(args.timeoutMs, timeoutMs);
       return runCommand(command, context, effectiveTimeout, maxOutputChars);
@@ -73,6 +76,7 @@ interface CommandOutcome {
   stderr: string;
   code: number | null;
   timedOut: boolean;
+  cancelled: boolean;
 }
 
 function runCommand(
@@ -92,11 +96,11 @@ function runCommand(
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let cancelled = false;
     const cap = maxOutputChars * 2;
 
-    const timer = setTimeout(() => {
-      timedOut = true;
-      // Kill the whole process group (detached) so child pipelines die too.
+    // Kill the whole process group (detached) so child pipelines die too.
+    const killGroup = () => {
       try {
         if (typeof child.pid === "number") {
           process.kill(-child.pid, "SIGKILL");
@@ -106,7 +110,16 @@ function runCommand(
       } catch {
         child.kill("SIGKILL");
       }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup();
     }, timeoutMs);
+    const onAbort = () => {
+      cancelled = true;
+      killGroup();
+    };
+    context.signal?.addEventListener("abort", onAbort, { once: true });
 
     child.stdout?.on("data", (chunk: Buffer) => {
       if (stdout.length < cap) {
@@ -121,12 +134,14 @@ function runCommand(
 
     child.on("error", (error) => {
       clearTimeout(timer);
+      context.signal?.removeEventListener("abort", onAbort);
       resolve(`Error: failed to start command: ${error instanceof Error ? error.message : String(error)}`);
     });
 
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve(formatOutcome(command, { stdout, stderr, code, timedOut }, timeoutMs, maxOutputChars));
+      context.signal?.removeEventListener("abort", onAbort);
+      resolve(formatOutcome(command, { stdout, stderr, code, timedOut, cancelled }, timeoutMs, maxOutputChars));
     });
   });
 }
@@ -136,7 +151,9 @@ function formatOutcome(command: string, outcome: CommandOutcome, timeoutMs: numb
   const combined = [outcome.stdout.trim(), outcome.stderr.trim()].filter(Boolean).join("\n");
   sections.push(combined.length > 0 ? combined : "(no output)");
 
-  if (outcome.timedOut) {
+  if (outcome.cancelled) {
+    sections.push("[command was killed because the user interrupted the turn]");
+  } else if (outcome.timedOut) {
     sections.push(`[command timed out after ${timeoutMs}ms and was killed]`);
   } else if (outcome.code !== 0 && outcome.code !== null) {
     sections.push(`[exit code ${outcome.code}]`);

@@ -140,6 +140,11 @@ export function useAgentSocket(sessionKey: string, options: UseAgentSocketOption
       setActive(false);
       setAborting(false);
       setError(message.error);
+      // Interrupted turns keep their finished steps on the server; reload so
+      // the timeline shows the saved history instead of the live draft.
+      if (message.code === "turn_aborted") {
+        onDoneRef.current?.();
+      }
       return;
     }
 

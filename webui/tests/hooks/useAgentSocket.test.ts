@@ -230,4 +230,38 @@ describe("useAgentSocket", () => {
     await waitFor(() => expect(result.current.error).toBe("something went wrong"));
     expect(result.current.active).toBe(false);
   });
+
+  it("reloads the session after an interrupted turn so saved steps show", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAgentSocket("default", { onDone }));
+
+    await act(async () => {
+      FakeWebSocket.instances[0]?.emit("open");
+      result.current.send("hello");
+      FakeWebSocket.instances[0]?.emit("message", messageEvent({
+        type: "error",
+        error: "Run aborted by caller.",
+        code: "turn_aborted"
+      }));
+    });
+
+    await waitFor(() => expect(result.current.active).toBe(false));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reload the session for other errors", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAgentSocket("default", { onDone }));
+
+    await act(async () => {
+      FakeWebSocket.instances[0]?.emit("open");
+      result.current.send("hello");
+      FakeWebSocket.instances[0]?.emit("message", messageEvent({ type: "error", error: "boom" }));
+    });
+
+    await waitFor(() => expect(result.current.active).toBe(false));
+    expect(onDone).not.toHaveBeenCalled();
+  });
 });
